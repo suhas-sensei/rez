@@ -1,4 +1,4 @@
-# Hyperliquid AI Trading Agent (Simulation)
+# AI Trading Agent (Simulation)
 
 A simulation-based AI trading agent that uses real-time market data from TAAPI to make trading decisions using AI models, with performance visualization through a simple GUI. Based on the Nocturn repository but modified for simulation trading.
 
