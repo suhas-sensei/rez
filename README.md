@@ -8,6 +8,7 @@ A simulation-based AI trading agent that uses real-time market data from TAAPI t
 - AI-powered trading decisions using technical indicators
 - Real-time portfolio visualization dashboard
 - Support for open-source LLMs (Ollama, etc.) as well as commercial APIs
+- **NEW: Python quant library fallback mechanism** - automatic fallback to quantitative analysis when LLM services are unavailable
 - Configurable starting funds and risk parameters
 - Simple GUI for monitoring portfolio performance
 
@@ -142,6 +143,19 @@ The dashboard will open in your browser at [http://localhost:8501](http://localh
 
 The AI agent analyzes technical indicators (RSI, MACD, EMA, etc.) and makes BUY, SELL, or HOLD decisions based on market conditions. In simulation mode, these decisions affect your virtual portfolio value.
 
+### Fallback Mechanism:
+
+The system includes a robust Python quant library fallback that activates when LLM services become unavailable. When the AI service fails, the system automatically uses Python libraries (pandas-ta, ta) to calculate technical indicators and make trading decisions based on:
+- RSI (Relative Strength Index)
+- MACD (Moving Average Convergence Divergence)
+- EMA (Exponential Moving Average)
+- SMA (Simple Moving Average)
+- Bollinger Bands
+- Stochastic Oscillator
+- Additional quantitative analysis methods
+
+This ensures continuous operation even when external AI services are down.
+
 ## Configuration Options
 
 ### Environment Variables:
@@ -184,6 +198,16 @@ To use a different model, update the `LLM_BASE_URL` and `LLM_MODEL` in your `.en
 
 The simulation is designed to approximate real market behavior while using virtual funds.
 
+## Python Quant Library Fallback
+
+The system implements a sophisticated fallback mechanism using Python quantitative analysis libraries. When the primary LLM service is unavailable, the system seamlessly switches to using:
+
+- **pandas-ta**: Advanced technical analysis indicators
+- **ta**: Financial technical analysis library
+- **numpy/scipy**: Mathematical and statistical computations
+
+This fallback provides reliable trading decisions based on multiple technical indicators using quantitative analysis methods, ensuring continuous operation without depending solely on external AI services.
+
 ## Safety & Disclaimers
 
 - ✅ This is a simulation - no real money is used
@@ -224,6 +248,12 @@ The simulation is designed to approximate real market behavior while using virtu
 - Start with fewer assets (e.g., just BTC) to reduce API calls
 - Increase the interval (e.g., `--interval 4h` instead of `--interval 1h`) to reduce frequency
 - Monitor your TAAPI.io usage to avoid hitting rate limits
+
+### Fallback Mechanism Troubleshooting:
+
+- If the LLM service is not working, the system will automatically use the Python quant library fallback
+- Check console output for "Error getting AI decision" messages to confirm fallback activation
+- The fallback mechanism includes comprehensive error handling for missing or None indicator values
 
 ## License
 
