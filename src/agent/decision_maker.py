@@ -85,7 +85,8 @@ def make_trading_decision(asset, indicators, portfolio_value):
 def quant_based_decision(indicators):
     """
     Advanced fallback decision based on quant library calculations.
-    This function uses multiple technical indicators to make more nuanced decisions.
+    This function uses multiple technical indicators to make more nuanced decisions
+    with market regime awareness and better risk management.
     """
     try:
         # Extract key indicators with safe access
@@ -93,14 +94,27 @@ def quant_based_decision(indicators):
         macd = indicators.get('macd', {'value': 0, 'signal': 0}) or {'value': 0, 'signal': 0}
         macd_value = macd.get('value', 0) or 0
         macd_signal = macd.get('signal', 0) or 0
+        macd_histogram = macd.get('histogram', 0) or 0  # Added to detect momentum
         ema = indicators.get('ema', 0) or 0
         sma = indicators.get('sma', 0) or 0
         bb_data = indicators.get('bollinger_bands', {'upper': 0, 'middle': 0, 'lower': 0}) or {'upper': 0, 'middle': 0, 'lower': 0}
         current_price = indicators.get('current_price', 0) or 0
         bb_position = indicators.get('bb_position', 0.5) or 0.5  # Position within BB (0-1)
+        bb_width = indicators.get('bb_width', 0) or 0  # Width of BB bands
         stochastic_data = indicators.get('stochastic', {'k': 50, 'd': 50}) or {'k': 50, 'd': 50}
         stoch_k = stochastic_data.get('k', 50) or 50
         stoch_d = stochastic_data.get('d', 50) or 50
+        volume = indicators.get('volume', 0) or 0
+        
+        # Calculate market regime indicators
+        trend_strength = abs(ema - sma) / current_price  # Normalized trend strength
+        volatility = bb_width / current_price  # Price volatility measure
+        macd_momentum = abs(macd_histogram)  # Momentum strength
+        
+        # Determine market regime
+        is_trending = trend_strength > 0.02  # More than 2% difference suggests trend
+        is_volatile = volatility > 0.05  # More than 5% BB width suggests volatility
+        has_momentum = abs(macd_histogram) > 0.001 * current_price  # Significant momentum
         
         # Initialize scores
         rsi_score = 0
@@ -108,49 +122,125 @@ def quant_based_decision(indicators):
         ma_score = 0
         bb_score = 0
         stoch_score = 0
+        trend_factor = 1.0  # Factor to adjust scores based on market regime
         
-        # RSI Analysis
-        if rsi < 30:  # Oversold - BUY signal
-            rsi_score = 2
-        elif rsi < 40:  # Slightly oversold - BUY signal
-            rsi_score = 1
-        elif rsi > 70:  # Overbought - SELL signal
-            rsi_score = -2
-        elif rsi > 60:  # Slightly overbought - SELL signal
-            rsi_score = -1
+        # Adjust strategy based on market regime
+        if is_trending:
+            # In trending markets, favor momentum-following signals
+            trend_factor = 1.5
+        elif is_volatile and not is_trending:
+            # In volatile but non-trending markets, favor mean reversion
+            trend_factor = 0.8
+        else:
+            # In stable markets, use standard scoring
+            trend_factor = 1.0
         
-        # MACD Analysis
-        if macd_value > macd_signal:  # Bullish crossover
-            macd_score = 1
-        elif macd_value < macd_signal:  # Bearish crossover
-            macd_score = -1
+        # RSI Analysis - Adjusted with market regime awareness
+        if rsi < 30:  # Strong oversold - BUY signal (stronger in ranging markets)
+            rsi_score = 1.5 if not is_trending else 1.0
+        elif rsi < 40:  # Mild oversold - BUY signal
+            rsi_score = 1.0 if not is_trending else 0.5
+        elif rsi > 70:  # Strong overbought - SELL signal
+            rsi_score = -1.5 if not is_trending else -1.0
+        elif rsi > 60:  # Mild overbought - SELL signal
+            rsi_score = -1.0 if not is_trending else -0.5
         
-        # Moving Average Analysis
-        if current_price > ema and ema > sma:  # Price above EMA and EMA above SMA (bullish)
-            ma_score = 1
-        elif current_price < ema and ema < sma:  # Price below EMA and EMA below SMA (bearish)
-            ma_score = -1
+        # MACD Analysis - Consider histogram for momentum
+        if macd_value > macd_signal and has_momentum:  # Bullish crossover with momentum
+            macd_score = 1.2
+        elif macd_value > macd_signal:  # Bullish crossover without momentum
+            macd_score = 0.8
+        elif macd_value < macd_signal and has_momentum:  # Bearish crossover with momentum
+            macd_score = -1.2
+        elif macd_value < macd_signal:  # Bearish crossover without momentum
+            macd_score = -0.8
         
-        # Bollinger Bands Analysis
-        if bb_position < 0.2:  # Price near lower band (oversold)
-            bb_score = 1
-        elif bb_position > 0.8:  # Price near upper band (overbought)
-            bb_score = -1
+        # Moving Average Analysis - Consider trend strength
+        if current_price > ema and ema > sma:  # Bullish trend
+            ma_score = 1.0 if is_trending else 0.5
+        elif current_price < ema and ema < sma:  # Bearish trend
+            ma_score = -1.0 if is_trending else -0.5
+        # When MA signals conflict with other indicators, reduce confidence
         
-        # Stochastic Analysis
-        if stoch_k < 20 and stoch_k > stoch_d:  # Oversold and bullish crossover
-            stoch_score = 1
-        elif stoch_k > 80 and stoch_k < stoch_d:  # Overbought and bearish crossover
-            stoch_score = -1
+        # Bollinger Bands Analysis - More nuanced approach
+        if bb_position < 0.15 and not is_trending:  # Deep oversold in ranging market - BUY
+            bb_score = 1.5
+        elif bb_position < 0.25 and not is_trending:  # Oversold in ranging market - BUY
+            bb_score = 1.0
+        elif bb_position > 0.85 and not is_trending:  # Deep overbought in ranging market - SELL
+            bb_score = -1.5
+        elif bb_position > 0.75 and not is_trending:  # Overbought in ranging market - SELL
+            bb_score = -1.0
+        elif is_trending:  # In trending markets, touching bands might be continuation signals
+            if current_price > bb_data.get('upper', current_price) and ma_score > 0:  # Breaking out in uptrend - BUY
+                bb_score = 0.8
+            elif current_price < bb_data.get('lower', current_price) and ma_score < 0:  # Breaking out in downtrend - SELL
+                bb_score = -0.8
         
-        # Calculate composite score
+        # Stochastic Analysis - Consider crossover and momentum
+        stoch_diff = stoch_k - stoch_d
+        if stoch_k < 20 and stoch_diff > 5:  # Oversold with bullish momentum
+            stoch_score = 1.2
+        elif stoch_k < 30 and stoch_diff > 0:  # Mildly oversold with bullish bias
+            stoch_score = 0.8
+        elif stoch_k > 80 and stoch_diff < -5:  # Overbought with bearish momentum
+            stoch_score = -1.2
+        elif stoch_k > 70 and stoch_diff < 0:  # Mildly overbought with bearish bias
+            stoch_score = -0.8
+        
+        # Adjust scores based on market regime
+        rsi_score *= trend_factor
+        macd_score *= trend_factor
+        bb_score *= trend_factor
+        stoch_score *= trend_factor
+        
+        # Apply risk management - if indicators conflict significantly, reduce trading aggressiveness
         total_score = rsi_score + macd_score + ma_score + bb_score + stoch_score
         
-        # Make decision based on composite score
-        # Lower thresholds to make the system more responsive
-        if total_score >= 1:
+        # Calculate consensus level - how many indicators agree
+        bullish_signals = sum(1 for s in [rsi_score, macd_score, bb_score, stoch_score] if s > 0.5)
+        bearish_signals = sum(1 for s in [rsi_score, macd_score, bb_score, stoch_score] if s < -0.5)
+        agreement_level = max(bullish_signals, bearish_signals)
+        
+        # Adjust score based on agreement level (confidence in signal)
+        if agreement_level >= 3:  # Strong agreement
+            total_score *= 1.2
+        elif agreement_level == 1:  # Weak agreement
+            total_score *= 0.7
+        
+        # Apply volume confirmation if available (higher volume confirms trends)
+        if volume > 0:
+            volume_factor = 1.1 if abs(total_score) > 0.5 else 1.0
+            total_score *= volume_factor
+        
+        # Make final decision with dynamic thresholds based on market conditions
+        # In volatile/trending markets, require stronger signals but also consider trend-following
+        base_buy_threshold = 1.2 if (is_volatile or is_trending) else 0.7
+        base_sell_threshold = -1.2 if (is_volatile or is_trending) else -0.7
+        
+        # Adjust thresholds based on agreement level
+        if agreement_level >= 3:  # Strong agreement
+            buy_threshold = base_buy_threshold * 0.8  # Lower threshold when indicators agree
+            sell_threshold = base_sell_threshold * 0.8
+        elif agreement_level <= 1:  # Weak agreement
+            buy_threshold = base_buy_threshold * 1.5  # Higher threshold when indicators disagree
+            sell_threshold = base_sell_threshold * 1.5
+        else:  # Moderate agreement
+            buy_threshold = base_buy_threshold
+            sell_threshold = base_sell_threshold
+        
+        # In trending markets, be more willing to follow the trend if momentum aligns
+        if is_trending and ma_score != 0:
+            trend_aligned = (total_score > 0 and ma_score > 0) or (total_score < 0 and ma_score < 0)
+            if trend_aligned:
+                # Reduce threshold by 20% if we're aligned with the trend
+                buy_threshold *= 0.8
+                sell_threshold *= 0.8
+        
+        # Final decision
+        if total_score >= buy_threshold:
             return 'BUY'
-        elif total_score <= -1:
+        elif total_score <= sell_threshold:
             return 'SELL'
         else:
             return 'HOLD'
