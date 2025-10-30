@@ -8,6 +8,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from agent.decision_maker import make_trading_decision
+from agent.allocation_maker import make_initial_allocation_decision
 from indicators.taapi_client import get_technical_indicators
 from trading import hyperliquid_api  # This will be our simulation layer
 from config_loader import load_config
@@ -29,6 +30,24 @@ def main():
     print(f"Starting AI Trading Agent with ${args.starting_funds} in simulation mode")
     print(f"Trading assets: {args.assets}")
     print(f"Time interval: {args.interval}")
+    
+    # Get initial market data for all assets to make allocation decision
+    print("Fetching initial market data for allocation...")
+    initial_indicators_map = {}
+    for asset in args.assets:
+        print(f"Getting data for {asset}...")
+        initial_indicators_map[asset] = get_technical_indicators(asset, args.interval)
+        time.sleep(0.5)  # Small delay to prevent rate limiting
+    
+    # Make initial allocation decision if not already allocated
+    if not hyperliquid_api.is_initial_allocation_done():
+        print("Making initial allocation decision...")
+        allocation_decision = make_initial_allocation_decision(args.assets, initial_indicators_map, args.starting_funds)
+        print(f"Initial allocation decision: {allocation_decision}")
+        
+        # Execute the initial allocation
+        allocation_result = hyperliquid_api.execute_initial_allocation_simulation(args.assets, allocation_decision)
+        print(f"Initial allocation result: {allocation_result}")
     
     # Main trading loop (for simulation, we can run for a limited number of iterations)
     iterations = 0

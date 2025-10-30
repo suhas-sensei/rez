@@ -81,7 +81,7 @@ class QuantIndicatorCalculator:
         # Calculate additional indicators for better analysis
         stoch_data = self._calculate_stochastic(high_prices, low_prices, close_prices)
         bb_width = bb_data['upper'] - bb_data['lower']
-        bb_position = (close_prices[-1] - bb_data['lower']) / (bb_width) if bb_width != 0 else 0.5
+        bb_position = (close_prices[-1] - bb_data['lower']) / (bb_width) if bb_width != 0 and bb_width is not None else 0.5
         
         return {
             'rsi': rsi,
@@ -124,13 +124,13 @@ class QuantIndicatorCalculator:
             avg_gain = np.mean(gain) if len(gain) > 0 else 0
             avg_loss = np.mean(loss) if len(loss) > 0 else 0.001  # Avoid division by zero
         
-        if avg_loss == 0:
+        if avg_loss == 0 or avg_loss is None:
             return 100.0
         
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
+        rs = avg_gain / avg_loss if avg_loss != 0 else 0
+        rsi = 100 - (100 / (1 + rs)) if (1 + rs) != 0 else 50.0
         return float(rsi)
-    
+
         # Default fallback
         return 50.0
     

@@ -106,9 +106,9 @@ def quant_based_decision(indicators):
         stoch_d = stochastic_data.get('d', 50) or 50
         volume = indicators.get('volume', 0) or 0
         
-        # Calculate market regime indicators
-        trend_strength = abs(ema - sma) / current_price  # Normalized trend strength
-        volatility = bb_width / current_price  # Price volatility measure
+        # Calculate market regime indicators with zero-division protection
+        trend_strength = abs(ema - sma) / current_price if current_price != 0 else 0  # Normalized trend strength
+        volatility = bb_width / current_price if current_price != 0 and bb_width is not None else 0  # Price volatility measure
         macd_momentum = abs(macd_histogram)  # Momentum strength
         
         # Determine market regime
