@@ -10,20 +10,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config_loader import load_config
 from typing import Dict, Any, Optional
 
-# Import optional dependencies with fallbacks
+# Import TA-Lib (reliable for Python 3.14)
 try:
-    import pandas_ta as ta
-    PANDAS_TA_AVAILABLE = True
+    import talib
+    TALIB_AVAILABLE = True
 except ImportError:
-    PANDAS_TA_AVAILABLE = False
-    ta = None
-
-try:
-    import ta as ta_lib
-    TA_LIB_AVAILABLE = True
-except ImportError:
-    TA_LIB_AVAILABLE = False
-    ta_lib = None
+    TALIB_AVAILABLE = False
 
 
 class QuantIndicatorCalculator:
@@ -98,21 +90,19 @@ class QuantIndicatorCalculator:
     
     def _calculate_rsi(self, prices: np.array, period: int = 14) -> float:
         """
-        Calculate Relative Strength Index using pandas-ta
+        Calculate Relative Strength Index using TA-Lib
         """
         try:
-            # Convert to pandas Series
-            series = pd.Series(prices)
-            if PANDAS_TA_AVAILABLE:
-                rsi = ta.rsi(series, length=period)
-                if rsi is not None and len(rsi) > 0:
-                    return float(rsi.iloc[-1])
+            if TALIB_AVAILABLE:
+                rsi = talib.RSI(prices, timeperiod=period)
+                if rsi is not None and len(rsi) > 0 and not np.isnan(rsi[-1]):
+                    return float(rsi[-1])
             else:
-                print("pandas-ta not available, using manual RSI calculation")
+                print("talib not available, using manual RSI calculation")
         except:
             pass
         
-        # Fallback calculation if pandas-ta fails or is not available
+        # Fallback calculation if TA-Lib fails or is not available
         deltas = np.diff(prices)
         gain = np.where(deltas > 0, deltas, 0)
         loss = np.where(deltas < 0, -deltas, 0)
@@ -136,20 +126,19 @@ class QuantIndicatorCalculator:
     
     def _calculate_macd(self, prices: np.array) -> Dict[str, float]:
         """
-        Calculate MACD using pandas-ta
+        Calculate MACD using TA-Lib
         """
         try:
-            series = pd.Series(prices)
-            if PANDAS_TA_AVAILABLE:
-                macd_df = ta.macd(series)
-                if macd_df is not None and not macd_df.empty:
+            if TALIB_AVAILABLE:
+                macd, macd_signal, macd_hist = talib.MACD(prices, fastperiod=12, slowperiod=26, signalperiod=9)
+                if macd is not None and len(macd) > 0 and not np.isnan(macd[-1]):
                     return {
-                        'value': float(macd_df['MACD_12_26_9'].iloc[-1]) if 'MACD_12_26_9' in macd_df.columns else 0.0,
-                        'signal': float(macd_df['MACDs_12_26_9'].iloc[-1]) if 'MACDs_12_26_9' in macd_df.columns else 0.0,
-                        'histogram': float(macd_df['MACDh_12_26_9'].iloc[-1]) if 'MACDh_12_26_9' in macd_df.columns else 0.0
+                        'value': float(macd[-1]) if not np.isnan(macd[-1]) else 0.0,
+                        'signal': float(macd_signal[-1]) if not np.isnan(macd_signal[-1]) else 0.0,
+                        'histogram': float(macd_hist[-1]) if not np.isnan(macd_hist[-1]) else 0.0
                     }
             else:
-                print("pandas-ta not available, using manual MACD calculation")
+                print("talib not available, using manual MACD calculation")
         except:
             pass
         
@@ -170,16 +159,15 @@ class QuantIndicatorCalculator:
     
     def _calculate_ema(self, prices: np.array, period: int = 20) -> float:
         """
-        Calculate Exponential Moving Average
+        Calculate Exponential Moving Average using TA-Lib
         """
         try:
-            series = pd.Series(prices)
-            if PANDAS_TA_AVAILABLE:
-                ema = ta.ema(series, length=period)
-                if ema is not None and len(ema) > 0:
-                    return float(ema.iloc[-1])
+            if TALIB_AVAILABLE:
+                ema = talib.EMA(prices, timeperiod=period)
+                if ema is not None and len(ema) > 0 and not np.isnan(ema[-1]):
+                    return float(ema[-1])
             else:
-                print("pandas-ta not available, using manual EMA calculation")
+                print("talib not available, using manual EMA calculation")
         except:
             pass
         
@@ -196,16 +184,15 @@ class QuantIndicatorCalculator:
     
     def _calculate_sma(self, prices: np.array, period: int = 20) -> float:
         """
-        Calculate Simple Moving Average
+        Calculate Simple Moving Average using TA-Lib
         """
         try:
-            series = pd.Series(prices)
-            if PANDAS_TA_AVAILABLE:
-                sma = ta.sma(series, length=period)
-                if sma is not None and len(sma) > 0:
-                    return float(sma.iloc[-1])
+            if TALIB_AVAILABLE:
+                sma = talib.SMA(prices, timeperiod=period)
+                if sma is not None and len(sma) > 0 and not np.isnan(sma[-1]):
+                    return float(sma[-1])
             else:
-                print("pandas-ta not available, using manual SMA calculation")
+                print("talib not available, using manual SMA calculation")
         except:
             pass
         
@@ -218,20 +205,19 @@ class QuantIndicatorCalculator:
     
     def _calculate_bollinger_bands(self, prices: np.array, period: int = 20, std_dev: int = 2) -> Dict[str, float]:
         """
-        Calculate Bollinger Bands
+        Calculate Bollinger Bands using TA-Lib
         """
         try:
-            series = pd.Series(prices)
-            if PANDAS_TA_AVAILABLE:
-                bb = ta.bbands(series, length=period, std=std_dev)
-                if bb is not None and not bb.empty:
+            if TALIB_AVAILABLE:
+                upper, middle, lower = talib.BBANDS(prices, timeperiod=period, nbdevup=std_dev, nbdevdn=std_dev, matype=0)
+                if upper is not None and len(upper) > 0 and not np.isnan(upper[-1]):
                     return {
-                        'upper': float(bb[f'BBU_{period}_{std_dev}.0'].iloc[-1]) if f'BBU_{period}_{std_dev}.0' in bb.columns else float(np.mean(prices) + std_dev * np.std(prices)),
-                        'middle': float(bb[f'BBM_{period}_{std_dev}.0'].iloc[-1]) if f'BBM_{period}_{std_dev}.0' in bb.columns else float(np.mean(prices)),
-                        'lower': float(bb[f'BBL_{period}_{std_dev}.0'].iloc[-1]) if f'BBL_{period}_{std_dev}.0' in bb.columns else float(np.mean(prices) - std_dev * np.std(prices))
+                        'upper': float(upper[-1]),
+                        'middle': float(middle[-1]),
+                        'lower': float(lower[-1])
                     }
             else:
-                print("pandas-ta not available, using manual Bollinger Bands calculation")
+                print("talib not available, using manual Bollinger Bands calculation")
         except:
             pass
         
@@ -260,22 +246,19 @@ class QuantIndicatorCalculator:
     
     def _calculate_stochastic(self, high_prices: np.array, low_prices: np.array, close_prices: np.array, k_period: int = 14, d_period: int = 3) -> Dict[str, float]:
         """
-        Calculate Stochastic Oscillator
+        Calculate Stochastic Oscillator using TA-Lib
         """
         try:
-            if PANDAS_TA_AVAILABLE:
-                high_series = pd.Series(high_prices)
-                low_series = pd.Series(low_prices)
-                close_series = pd.Series(close_prices)
-                
-                stoch = ta.stoch(high_series, low_series, close_series, k=k_period, d=d_period, smooth_k=1)
-                if stoch is not None and not stoch.empty:
+            if TALIB_AVAILABLE:
+                slowk, slowd = talib.STOCH(high_prices, low_prices, close_prices, 
+                                          fastk_period=k_period, slowk_period=d_period, slowd_period=d_period)
+                if slowk is not None and len(slowk) > 0 and not np.isnan(slowk[-1]):
                     return {
-                        'k': float(stoch[f'STOCHk_{k_period}_{d_period}_1'].iloc[-1]) if f'STOCHk_{k_period}_{d_period}_1' in stoch.columns else 50.0,
-                        'd': float(stoch[f'STOCHd_{k_period}_{d_period}_1'].iloc[-1]) if f'STOCHd_{k_period}_{d_period}_1' in stoch.columns else 50.0
+                        'k': float(slowk[-1]),
+                        'd': float(slowd[-1])
                     }
             else:
-                print("pandas-ta not available, using manual Stochastic calculation")
+                print("talib not available, using manual Stochastic calculation")
         except:
             pass
         

@@ -8,8 +8,10 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from agent.decision_maker import make_trading_decision
+from agent.advanced_decision_maker import make_advanced_trading_decision
 from agent.allocation_maker import make_initial_allocation_decision
 from indicators.taapi_client import get_technical_indicators
+from indicators.historical_data_fetcher import get_historical_data
 from trading import hyperliquid_api  # This will be our simulation layer
 from config_loader import load_config
 
@@ -58,29 +60,34 @@ def main():
             for asset in args.assets:
                 print(f"\n--- Iteration {iterations + 1}, Asset: {asset} ---")
                 
-                # Get technical indicators from TAAPI
-                indicators = get_technical_indicators(asset, args.interval)
+                # Get technical indicators from TAAPI (for basic info)
+                basic_indicators = get_technical_indicators(asset, args.interval)
+                
+                # Get historical data for advanced algorithm
+                historical_data = get_historical_data(asset, args.interval, lookback_periods=50)
                 
                 # Get current portfolio state
                 portfolio_value = hyperliquid_api.get_portfolio_value()
                 
-                # Make trading decision using AI
-                decision = make_trading_decision(asset, indicators, portfolio_value)
+                # Make advanced trading decision using sophisticated algorithm
+                advanced_decision = make_advanced_trading_decision(asset, historical_data, portfolio_value)
+                decision = advanced_decision['decision']
                 
                 # Execute the decision in simulation
                 result = hyperliquid_api.execute_trade_simulation(asset, decision)
                 
                 print(f"Decision: {decision}")
+                print(f"Advanced Analysis: {advanced_decision['regime']} regime, confidence={advanced_decision['confidence']:.2f}")
                 print(f"Result: {result}")
                 
-                # Log this trade to file for GUI
-                log_trade(asset, decision, result, portfolio_value)
+                # Log this trade to file for GUI with advanced analysis
+                log_trade(asset, decision, result, portfolio_value, advanced_decision)
                 
                 # Small delay to prevent API rate limiting in simulation
-                time.sleep(1)
+                time.sleep(0.5)  # Reduced delay for faster execution
                 
             iterations += 1
-            time.sleep(5)  # Wait between cycles
+            time.sleep(2)  # Reduced wait time between cycles for more frequent trading
             
         except KeyboardInterrupt:
             print("\nStopping agent...")
@@ -92,7 +99,7 @@ def main():
     print("\nFinal portfolio value:", hyperliquid_api.get_portfolio_value())
 
 
-def log_trade(asset, decision, result, portfolio_value):
+def log_trade(asset, decision, result, portfolio_value, advanced_decision=None):
     """Log trade data for GUI visualization"""
     log_entry = {
         "timestamp": datetime.now().isoformat(),
@@ -101,6 +108,16 @@ def log_trade(asset, decision, result, portfolio_value):
         "result": result,
         "portfolio_value": portfolio_value
     }
+    
+    # Add advanced decision data if available
+    if advanced_decision:
+        log_entry['advanced_analysis'] = {
+            'regime': advanced_decision.get('regime', 'unknown'),
+            'confidence': advanced_decision.get('confidence', 0),
+            'combined_signal': advanced_decision.get('combined_signal', 0),
+            'strength': advanced_decision.get('strength', 'unknown'),
+            'position_size': advanced_decision.get('position_size', 0)
+        }
     
     # Append to trades log file
     with open('trades_log.jsonl', 'a') as f:
