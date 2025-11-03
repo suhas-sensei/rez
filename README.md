@@ -9,6 +9,8 @@ A simulation-based AI trading agent that uses real-time market data from TAAPI t
 - Real-time portfolio visualization dashboard
 - Support for open-source LLMs (Ollama, etc.) as well as commercial APIs
 - **NEW: Python quant library fallback mechanism** - automatic fallback to quantitative analysis when LLM services are unavailable
+- **NEW: Advanced Risk Management System** - comprehensive risk profile-based trading with customizable parameters (low/medium/high risk)
+- **NEW: Dynamic Asset Selection** - risk-based asset universes with adaptive filtering
 - Configurable starting funds and risk parameters
 - Simple GUI for monitoring portfolio performance
 
@@ -107,11 +109,23 @@ source venv/bin/activate  # Linux/Mac
 # OR
 venv\Scripts\activate   # Windows
 
-# Run the agent (default assets: BTC ETH, interval: 1h, starting funds: $1000)
+# Run the agent with default settings (BTC, ETH, 1h interval, $1000 starting funds)
 python src/main.py
 
-# Run with custom parameters
-python src/main.py --assets BTC ETH SOL --interval 1h --starting-funds 5000
+# Run with custom assets
+python src/main.py --assets BTC ETH SOL AVAX DOGE --interval 1h --starting-funds 5000
+
+# Run with low risk profile (conservative trading)
+python src/main.py --risk-profile low --assets BTC ETH --starting-funds 1000
+
+# Run with high risk profile (aggressive trading)
+python src/main.py --risk-profile high --assets SOL ARB LINK DOGE APT PEPE --starting-funds 1000
+
+# Run with custom risk parameters
+python src/main.py --risk-profile medium --stop-loss 8 --position-size-limit 5 --assets BTC ETH SOL --starting-funds 2000
+
+# Run with custom parameters overriding risk profile defaults
+python src/main.py --risk-profile low --stop-loss 6 --risk-per-trade 1.5 --assets BTC ETH --interval 4h --starting-funds 10000
 ```
 
 ### 2. View the Portfolio Dashboard
@@ -137,11 +151,32 @@ The dashboard will open in your browser at [http://localhost:8501](http://localh
 1. **Portfolio Value Over Time**: Line chart showing how your simulated portfolio value changes over time
 2. **Metrics**: Current portfolio value, total P&L (Profit & Loss), and number of trades executed
 3. **Performance Statistics**: Total return percentage, maximum and minimum portfolio values
-4. **Recent Trades**: Table showing the last 10 trades made by the AI agent
+4. **Recent Trades**: Table showing the last 10 trades made by the AI agent with risk profile information
+5. **Risk Profile Display**: Shows the risk profile currently being used by the trading agent
 
 ### Trading Decisions:
 
 The AI agent analyzes technical indicators (RSI, MACD, EMA, etc.) and makes BUY, SELL, or HOLD decisions based on market conditions. In simulation mode, these decisions affect your virtual portfolio value.
+
+## Advanced Risk Management System
+
+The system now includes sophisticated risk management features:
+
+### Risk Profiles:
+- **Low Risk**: Conservative trading with tight stop-loss (3-5%), small position sizing (1-2%), and conservative entry signals
+- **Medium Risk**: Balanced trading with moderate stop-loss (6-8%), medium position sizing (2-4%), and balanced entry signals  
+- **High Risk**: Aggressive trading with wider stop-loss (9-12%), higher position sizing (4-6%), and aggressive entry signals
+
+### Custom Parameters:
+- `--stop-loss`: Custom stop-loss percentage (overrides profile default)
+- `--position-size-limit`: Custom position size limit as percentage (overrides profile default)
+- `--risk-per-trade`: Custom risk percentage per trade (overrides profile default)
+- `--take-profit`: Custom take-profit percentage
+
+### Asset Classification:
+- Assets are automatically classified based on volatility, liquidity, and market cap
+- Risk-appropriate assets are selected based on your chosen profile
+- Dynamic filtering ensures assets meet current quality standards
 
 ### Fallback Mechanism:
 
@@ -167,14 +202,23 @@ This ensures continuous operation even when external AI services are down.
 - `SIMULATION_MODE`: Should remain `true` for this simulation
 - `STARTING_FUNDS`: Initial virtual amount to start with (default: 1000.0)
 - `RISK_PER_TRADE`: Risk percentage per trade (default: 0.02 for 2%)
+- `RISK_PROFILE`: Default risk profile (low, medium, high; default: medium)
+- `CUSTOM_STOP_LOSS`: Custom stop-loss percentage override (in %, e.g., 5.0 for 5%)
+- `CUSTOM_POSITION_SIZE`: Custom position size limit override (in %, e.g., 4.0 for 4%)
+- `CUSTOM_RISK_PER_TRADE`: Custom risk per trade override (in %, e.g., 2.5 for 2.5%)
 
 ### Command Line Options:
 
 When running `python src/main.py`:
 
-- `--assets`: List of assets to trade (default: BTC ETH)
+- `--assets`: List of assets to trade (default: BTC ETH; if not specified, uses risk-appropriate assets)
 - `--interval`: Trading interval (default: 1h)
 - `--starting-funds`: Starting simulated funds amount (default: 1000.0)
+- `--risk-profile`: Risk profile for trading (low, medium, high; default: medium)
+- `--stop-loss`: Custom stop-loss percentage (overrides profile default)
+- `--position-size-limit`: Custom position size limit as percentage (overrides profile default)
+- `--risk-per-trade`: Custom risk percentage per trade (overrides profile default)
+- `--take-profit`: Custom take-profit percentage
 
 ## Supported LLMs
 
@@ -191,10 +235,11 @@ To use a different model, update the `LLM_BASE_URL` and `LLM_MODEL` in your `.en
 ## How the Simulation Works
 
 1. The agent fetches technical indicators from TAAPI.io
-2. The AI analyzes the indicators and market conditions to make trading decisions
+2. The AI analyzes the indicators and market conditions to make trading decisions based on your selected risk profile
 3. The simulation engine processes these decisions and adjusts your portfolio value
 4. Trade results are logged for the GUI dashboard
 5. The portfolio value changes based on simulated market movements
+6. Risk management parameters are automatically applied based on your selected profile
 
 The simulation is designed to approximate real market behavior while using virtual funds.
 
@@ -215,6 +260,7 @@ This fallback provides reliable trading decisions based on multiple technical in
 - ⚠️ Past performance in simulation does not indicate future results
 - ⚠️ Use at your own risk
 - ⚠️ This is for educational purposes only
+- ⚠️ Always test with conservative settings first when using custom parameters
 
 ## Troubleshooting
 
@@ -248,6 +294,7 @@ This fallback provides reliable trading decisions based on multiple technical in
 - Start with fewer assets (e.g., just BTC) to reduce API calls
 - Increase the interval (e.g., `--interval 4h` instead of `--interval 1h`) to reduce frequency
 - Monitor your TAAPI.io usage to avoid hitting rate limits
+- Use the appropriate risk profile for your trading style and experience level
 
 ### Fallback Mechanism Troubleshooting:
 
@@ -259,4 +306,4 @@ This fallback provides reliable trading decisions based on multiple technical in
 
 This project is open source and available under the MIT License.
 
-cd /home/tamoghna/rezlabs/hypeAI/hypeAI && source venv/bin/activate && python3 src/main.py --assets SOL ARB LINK DOGE APT PEPE --starting-funds 1000 --interval 1h
+cd /home/tamoghna/rezlabs/hypeAI/hypeAI && source venv/bin/activate && python3 src/main.py --assets SOL ARB LINK DOGE APT PEPE --starting-funds 1000 --interval 1h --risk-profile high

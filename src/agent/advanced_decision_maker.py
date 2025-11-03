@@ -33,14 +33,15 @@ class AdvancedTradingAlgorithm:
     - Momentum and mean reversion signals
     """
     
-    def __init__(self):
+    def __init__(self, risk_profile='medium'):
         self.config = load_config()
         self.models = {}
         self.scaler = StandardScaler()
         self.lookback = 50  # Number of historical data points to use
-        self.risk_manager = AdvancedRiskManager()
+        self.risk_manager = AdvancedRiskManager(risk_profile=risk_profile)
         self.regime_detector = MarketRegimeDetector()
         self.indicator_calculator = QuantIndicatorCalculator()
+        self.risk_profile = risk_profile
         
         # ML models for different purposes
         self.ml_models = {
@@ -216,7 +217,7 @@ class AdvancedTradingAlgorithm:
         except:
             return 0.5
     
-    def generate_advanced_signals(self, indicators: dict, asset: str, portfolio_value: float) -> dict:
+    def generate_advanced_signals(self, indicators: dict, asset: str, portfolio_value: float, risk_profile: str = 'medium') -> dict:
         """
         Generate multiple sophisticated signals combining technical and ML-based analysis
         """
@@ -228,40 +229,91 @@ class AdvancedTradingAlgorithm:
         signals['momentum_signal'] = self._calculate_momentum_signal(indicators)
         signals['volatility_signal'] = self._calculate_volatility_signal(indicators)
         
-        # Market regime analysis
-        regime = self.regime_detector.detect_regime(indicators)
-        signals['regime_signal'] = self._adjust_signals_for_regime(signals, regime)
+        # Market regime analysis with risk profile consideration
+        regime = self.regime_detector.detect_regime(indicators, risk_profile)
+        signals['regime_signal'] = self._adjust_signals_for_regime(signals, regime, risk_profile)
         
-        # Risk-adjusted position sizing
+        # Risk-adjusted position sizing considering profile
         position_size = self.risk_manager.calculate_position_size(
             asset, indicators, portfolio_value, regime
         )
         
-        # Calculate combined signal with regime-dependent weights
+        # Calculate combined signal with regime-dependent weights and risk profile adjustments
         if regime == 'trending':
             # In trending markets, favor momentum/trend-following
-            combined_signal = (
-                0.35 * signals['trend_signal'] + 
-                0.25 * signals['momentum_signal'] + 
-                0.20 * signals['regime_signal'] +
-                0.20 * signals['volatility_signal']
-            )
+            if risk_profile == 'high':
+                # More aggressive in trending markets for high risk
+                combined_signal = (
+                    0.25 * signals['trend_signal'] + 
+                    0.35 * signals['momentum_signal'] + 
+                    0.20 * signals['regime_signal'] +
+                    0.20 * signals['volatility_signal']
+                )
+            elif risk_profile == 'low':
+                # More conservative in trending markets for low risk
+                combined_signal = (
+                    0.40 * signals['trend_signal'] + 
+                    0.20 * signals['momentum_signal'] + 
+                    0.20 * signals['regime_signal'] +
+                    0.20 * signals['volatility_signal']
+                )
+            else:  # medium
+                combined_signal = (
+                    0.35 * signals['trend_signal'] + 
+                    0.25 * signals['momentum_signal'] + 
+                    0.20 * signals['regime_signal'] +
+                    0.20 * signals['volatility_signal']
+                )
         elif regime == 'volatile':
             # In volatile markets, favor mean reversion with caution
-            combined_signal = (
-                0.30 * signals['mean_reversion_signal'] + 
-                0.25 * signals['volatility_signal'] + 
-                0.25 * signals['regime_signal'] +
-                0.20 * signals['momentum_signal']
-            )
+            if risk_profile == 'high':
+                # Still engage in volatile markets for high risk but with caution
+                combined_signal = (
+                    0.25 * signals['mean_reversion_signal'] + 
+                    0.30 * signals['volatility_signal'] + 
+                    0.25 * signals['regime_signal'] +
+                    0.20 * signals['momentum_signal']
+                )
+            elif risk_profile == 'low':
+                # More cautious in volatile markets for low risk
+                combined_signal = (
+                    0.35 * signals['mean_reversion_signal'] + 
+                    0.20 * signals['volatility_signal'] + 
+                    0.20 * signals['regime_signal'] +
+                    0.25 * signals['momentum_signal']
+                )
+            else:  # medium
+                combined_signal = (
+                    0.30 * signals['mean_reversion_signal'] + 
+                    0.25 * signals['volatility_signal'] + 
+                    0.25 * signals['regime_signal'] +
+                    0.20 * signals['momentum_signal']
+                )
         else:  # ranging/normal
-            # Balanced approach
-            combined_signal = (
-                0.25 * signals['trend_signal'] + 
-                0.25 * signals['mean_reversion_signal'] + 
-                0.25 * signals['momentum_signal'] + 
-                0.25 * signals['volatility_signal']
-            )
+            if risk_profile == 'high':
+                # More aggressive approach for high risk in ranging markets
+                combined_signal = (
+                    0.30 * signals['trend_signal'] + 
+                    0.30 * signals['mean_reversion_signal'] + 
+                    0.20 * signals['momentum_signal'] + 
+                    0.20 * signals['volatility_signal']
+                )
+            elif risk_profile == 'low':
+                # More conservative approach for low risk in ranging markets
+                combined_signal = (
+                    0.30 * signals['trend_signal'] + 
+                    0.20 * signals['mean_reversion_signal'] + 
+                    0.25 * signals['momentum_signal'] + 
+                    0.25 * signals['volatility_signal']
+                )
+            else:  # medium
+                # Balanced approach
+                combined_signal = (
+                    0.25 * signals['trend_signal'] + 
+                    0.25 * signals['mean_reversion_signal'] + 
+                    0.25 * signals['momentum_signal'] + 
+                    0.25 * signals['volatility_signal']
+                )
         
         return {
             'combined_signal': combined_signal,
@@ -404,28 +456,58 @@ class AdvancedTradingAlgorithm:
             
         return signal
     
-    def _adjust_signals_for_regime(self, signals: dict, regime: str) -> float:
+    def _adjust_signals_for_regime(self, signals: dict, regime: str, risk_profile: str = 'medium') -> float:
         """
-        Adjust combined signal based on market regime
+        Adjust combined signal based on market regime and risk profile
         """
-        # In trending regimes, favor trend-following
-        # In range-bound, favor mean reversion
-        # In volatile, be more cautious
+        # Base weights that get adjusted based on risk profile
         if regime == 'trending':
-            trend_weight = 1.2
-            mean_rev_weight = 0.8
+            if risk_profile == 'high':
+                trend_weight = 1.3  # More aggressive trend following for high risk
+                mean_rev_weight = 0.7
+            elif risk_profile == 'low':
+                trend_weight = 1.1  # More conservative trend following for low risk
+                mean_rev_weight = 0.9
+            else:  # medium risk
+                trend_weight = 1.2
+                mean_rev_weight = 0.8
         elif regime == 'volatile':
-            trend_weight = 0.8
-            mean_rev_weight = 0.6
+            if risk_profile == 'high':
+                trend_weight = 0.9  # Slightly more engagement in volatile markets for high risk
+                mean_rev_weight = 0.7
+            elif risk_profile == 'low':
+                trend_weight = 0.7  # More cautious in volatile markets for low risk
+                mean_rev_weight = 0.5
+            else:  # medium risk
+                trend_weight = 0.8
+                mean_rev_weight = 0.6
         else:  # 'ranging'
-            trend_weight = 0.8
-            mean_rev_weight = 1.2
+            if risk_profile == 'high':
+                trend_weight = 0.9  # Slightly more trend following in ranging markets for high risk
+                mean_rev_weight = 1.1  # More mean reversion for high risk
+            elif risk_profile == 'low':
+                trend_weight = 0.7  # More conservative in ranging markets for low risk
+                mean_rev_weight = 1.3  # Emphasize mean reversion for low risk
+            else:  # medium risk
+                trend_weight = 0.8
+                mean_rev_weight = 1.2
         
-        # Calculate regime-adjusted signal
+        # Adjust momentum and volatility signals based on risk profile as well
+        if risk_profile == 'high':
+            momentum_weight = 1.1  # Slightly more momentum for high risk
+            vol_weight = 1.1  # Slightly more volatility consideration for high risk
+        elif risk_profile == 'low':
+            momentum_weight = 0.9  # Slightly less momentum for low risk
+            vol_weight = 0.9  # Slightly less volatility consideration for low risk
+        else:  # medium risk
+            momentum_weight = 1.0
+            vol_weight = 1.0
+        
+        # Calculate regime and risk-adjusted signals
         trend_signal = signals['trend_signal'] * trend_weight
         mean_rev_signal = signals['mean_reversion_signal'] * mean_rev_weight
-        momentum_signal = signals['momentum_signal'] * 1.0  # Neutral for momentum
-        vol_signal = signals['volatility_signal'] * 1.0  # Neutral for volatility
+        momentum_signal = signals['momentum_signal'] * momentum_weight
+        vol_signal = signals['volatility_signal'] * vol_weight
         
         return (trend_signal + mean_rev_signal + momentum_signal + vol_signal) / 4.0
 
@@ -435,10 +517,22 @@ class AdvancedRiskManager:
     Advanced risk management with position sizing based on Kelly Criterion
     """
     
-    def __init__(self):
-        self.max_position_size = 0.1  # Max 10% per position
-        self.max_total_risk = 0.25    # Max 25% total portfolio risk
-        self.kelly_fraction = 0.25    # Use 25% of Kelly formula recommendation
+    def __init__(self, risk_profile='medium'):
+        # Set parameters based on risk profile (more conservative for better performance)
+        self.risk_profile = risk_profile.lower()
+        
+        if self.risk_profile == 'low':
+            self.max_position_size = 0.015  # Max 1.5% per position (more conservative)
+            self.max_total_risk = 0.10     # Max 10% total portfolio risk
+            self.kelly_fraction = 0.10     # Use 10% of Kelly formula recommendation (more conservative)
+        elif self.risk_profile == 'high':
+            self.max_position_size = 0.03  # Max 3% per position (not too aggressive)
+            self.max_total_risk = 0.20     # Max 20% total portfolio risk
+            self.kelly_fraction = 0.18     # Use 18% of Kelly formula recommendation (moderate)
+        else:  # medium (default)
+            self.max_position_size = 0.02  # Max 2% per position
+            self.max_total_risk = 0.15     # Max 15% total portfolio risk
+            self.kelly_fraction = 0.15     # Use 15% of Kelly formula recommendation (conservative)
     
     def calculate_position_size(self, asset: str, indicators: dict, portfolio_value: float, regime: str) -> float:
         """
@@ -507,27 +601,104 @@ class AdvancedRiskManager:
             
         return max(0.45, min(0.65, base_win_rate))  # Bound between 45% and 65%
 
+    def calculate_stop_loss(self, indicators: dict, risk_profile: str = 'medium') -> float:
+        """
+        Calculate appropriate stop-loss percentage based on risk profile and market conditions
+        """
+        # Base stop-loss percentage based on risk profile (more reasonable for algorithm performance)
+        if risk_profile == 'low':
+            base_stop_loss = 0.08  # 8% for low risk (higher to avoid premature stops)
+        elif risk_profile == 'high':
+            base_stop_loss = 0.15  # 15% for high risk (to allow more room for fluctuations)
+        else:  # medium risk
+            base_stop_loss = 0.12  # 12% for medium risk (more reasonable range)
+        
+        # Adjust based on current volatility
+        current_volatility = indicators.get('volatility', 0.02)  # Default to 2% if not available
+        historical_volatility = 0.03  # This would normally be calculated from historical data
+        
+        # Scale stop-loss based on current vs historical volatility
+        if historical_volatility > 0:
+            volatility_ratio = current_volatility / historical_volatility
+            # Don't let the adjustment make stop-loss too wide or too tight
+            volatility_adjustment_factor = max(0.6, min(2.0, volatility_ratio))
+            adjusted_stop_loss = base_stop_loss * volatility_adjustment_factor
+        else:
+            adjusted_stop_loss = base_stop_loss
+        
+        # Ensure stop-loss is within reasonable bounds
+        min_stop_loss = 0.06 if risk_profile == 'low' else 0.08  # Minimum 6-8% (more reasonable)
+        max_stop_loss = 0.25 if risk_profile == 'high' else 0.20  # Maximum 20-25% (more reasonable)
+        
+        final_stop_loss = max(min_stop_loss, min(max_stop_loss, adjusted_stop_loss))
+        
+        return final_stop_loss
+
+    def calculate_trailing_stop_loss(self, indicators: dict, risk_profile: str = 'medium') -> float:
+        """
+        Calculate appropriate trailing stop-loss percentage for high-risk profiles
+        """
+        if risk_profile == 'high':
+            base_trailing_stop = 0.10  # 10% trailing for high risk (more reasonable)
+        elif risk_profile == 'medium':
+            base_trailing_stop = 0.07  # 7% trailing for medium risk (more reasonable)
+        else:  # low risk
+            base_trailing_stop = 0.05  # 5% trailing for low risk (more reasonable)
+        
+        # Adjust based on current market conditions
+        current_volatility = indicators.get('volatility', 0.02)
+        
+        # Increase trailing distance in high volatility conditions
+        if current_volatility > 0.05:  # High volatility threshold
+            # Increase trailing stop by up to 100% in high volatility to avoid whipsaws
+            adjustment = min(1.0, (current_volatility - 0.05) / 0.05)
+            final_trailing_stop = base_trailing_stop * (1 + adjustment)
+        else:
+            final_trailing_stop = base_trailing_stop
+        
+        return final_trailing_stop
+
 
 class MarketRegimeDetector:
     """
     Detect market regime (trending, ranging, volatile) for adaptive strategy
     """
     
-    def detect_regime(self, indicators: dict) -> str:
+    def detect_regime(self, indicators: dict, risk_profile: str = 'medium') -> str:
         """
-        Determine current market regime
+        Determine current market regime based on risk profile
         """
         volatility = indicators['volatility']
         atr = indicators['atr']
         hurst = indicators['hurst_exponent']
-        rsi_variability = abs(indicators['rsi'] - 50) / 50  # How far from neutral
+        current_price = indicators['current_price']
         
-        # Volatility threshold - high volatility (> 5% of price)
-        is_high_vol = volatility > 0.05 * indicators['current_price']
+        # Adjustable thresholds based on risk profile
+        if risk_profile == 'low':
+            # Conservative thresholds for low risk
+            vol_threshold_multiplier = 0.8  # Lower threshold for "high" volatility
+            hurst_trend_threshold = 0.65  # Higher threshold for trend detection
+            hurst_mean_rev_threshold = 0.35  # Lower threshold for mean reversion
+            atr_trend_threshold_multiplier = 0.8  # More conservative ATR threshold
+        elif risk_profile == 'high':
+            # Aggressive thresholds for high risk
+            vol_threshold_multiplier = 1.2  # Higher threshold for "high" volatility
+            hurst_trend_threshold = 0.55  # Lower threshold for trend detection
+            hurst_mean_rev_threshold = 0.45  # Higher threshold for mean reversion
+            atr_trend_threshold_multiplier = 1.2  # More aggressive ATR threshold
+        else:  # medium risk
+            # Standard thresholds
+            vol_threshold_multiplier = 1.0
+            hurst_trend_threshold = 0.6
+            hurst_mean_rev_threshold = 0.4
+            atr_trend_threshold_multiplier = 1.0
+        
+        # Volatility threshold - high volatility (> 5% of price, adjusted by risk profile)
+        is_high_vol = volatility > (0.05 * current_price * vol_threshold_multiplier)
         
         # Hurst exponent - determines trendiness (0.5 = random, >0.5 = trendy)
-        is_trending = hurst > 0.6
-        is_mean_reverting = hurst < 0.4
+        is_trending = hurst > hurst_trend_threshold
+        is_mean_reverting = hurst < hurst_mean_rev_threshold
         
         if is_high_vol:
             return 'volatile'
@@ -537,42 +708,60 @@ class MarketRegimeDetector:
             return 'ranging'
         else:
             # Look at price action - if ATR is large relative to price, it's trending
-            if atr > 0.02 * indicators['current_price']:
+            if atr > (0.02 * current_price * atr_trend_threshold_multiplier):
                 return 'trending'
             else:
                 return 'ranging'
 
 
-def make_advanced_trading_decision(asset: str, price_data: pd.DataFrame, portfolio_value: float) -> dict:
+def make_advanced_trading_decision(asset: str, price_data: pd.DataFrame, portfolio_value: float, risk_profile: str = 'medium') -> dict:
     """
     Main function to make advanced trading decisions
     """
     try:
-        # Initialize the algorithm
-        algo = AdvancedTradingAlgorithm()
+        # Initialize the algorithm with risk profile
+        algo = AdvancedTradingAlgorithm(risk_profile=risk_profile)
         
         # Calculate advanced indicators from price data
         indicators = algo.calculate_advanced_indicators(price_data)
         
         # Generate advanced signals
-        advanced_signals = algo.generate_advanced_signals(indicators, asset, portfolio_value)
+        advanced_signals = algo.generate_advanced_signals(indicators, asset, portfolio_value, risk_profile)
         
         # Create decision based on combined signal
         combined_signal = advanced_signals['combined_signal']
         confidence = advanced_signals['confidence']
         regime = advanced_signals['regime']
         
-        # Determine decision with confidence-based thresholds
-        if combined_signal > 0.3:  # Strong buy signal
+        # Determine decision with confidence-based thresholds that adjust based on risk profile
+        # More conservative thresholds to reduce overtrading and false signals
+        if risk_profile == 'low':
+            buy_threshold_strong = 0.5   # Higher threshold for low risk (more certainty needed)
+            buy_threshold_weak = 0.25    # Higher threshold for low risk
+            sell_threshold_strong = -0.5 # Higher threshold for low risk
+            sell_threshold_weak = -0.25  # Higher threshold for low risk
+        elif risk_profile == 'high':
+            buy_threshold_strong = 0.35  # More reasonable threshold for high risk
+            buy_threshold_weak = 0.15    # More reasonable threshold for high risk
+            sell_threshold_strong = -0.35 # More reasonable threshold for high risk
+            sell_threshold_weak = -0.15   # More reasonable threshold for high risk
+        else:  # medium
+            buy_threshold_strong = 0.4   # More conservative than original
+            buy_threshold_weak = 0.2     # More conservative than original
+            sell_threshold_strong = -0.4 # More conservative than original
+            sell_threshold_weak = -0.2   # More conservative than original
+        
+        # Determine decision with risk-profile adjusted thresholds
+        if combined_signal > buy_threshold_strong:  # Strong buy signal
             decision = 'BUY'
             strength = 'STRONG'
-        elif combined_signal > 0.1:  # Weak buy signal
+        elif combined_signal > buy_threshold_weak:  # Weak buy signal
             decision = 'BUY'
             strength = 'WEAK'
-        elif combined_signal < -0.3:  # Strong sell signal
+        elif combined_signal < sell_threshold_strong:  # Strong sell signal
             decision = 'SELL'
             strength = 'STRONG'
-        elif combined_signal < -0.1:  # Weak sell signal
+        elif combined_signal < sell_threshold_weak:  # Weak sell signal
             decision = 'SELL'
             strength = 'WEAK'
         else:  # Hold signal
@@ -593,7 +782,8 @@ def make_advanced_trading_decision(asset: str, price_data: pd.DataFrame, portfol
                 'macd': indicators['macd']['value'],
                 'volatility': indicators['volatility'],
                 'hurst_exponent': indicators['hurst_exponent']
-            }
+            },
+            'risk_profile': risk_profile
         }
         
         return result
@@ -620,5 +810,6 @@ def make_advanced_trading_decision(asset: str, price_data: pd.DataFrame, portfol
             'regime': 'unknown',
             'position_size': portfolio_value * 0.01,  # 1% default position
             'detailed_signals': {},
-            'indicators_used': basic_indicators
+            'indicators_used': basic_indicators,
+            'risk_profile': risk_profile
         }

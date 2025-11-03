@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 import os
 
-st.title("AI Trading Agent - Portfolio Performance Dashboard")
+st.title("Performance Dashboard")
 
 # Load trade history from log file
 def load_trade_history():
@@ -32,7 +32,22 @@ def load_trade_history():
     # Calculate cumulative portfolio value
     df['cumulative_portfolio'] = df['portfolio_value'].expanding().max()
     
-    return df
+    # Only show the most recent trading session (last 2 hours of data or last 50 trades, whichever is smaller)
+    # This ensures fresh data is displayed for each run
+    if len(df) > 0:
+        # Get the most recent timestamp
+        latest_time = df['timestamp'].max()
+        # Filter to show only data from the last 2 hours (or all if less than 2 hours of data)
+        time_threshold = latest_time - pd.Timedelta(hours=2)
+        recent_df = df[df['timestamp'] >= time_threshold]
+        
+        # If more than 50 recent trades, show only the last 50
+        if len(recent_df) > 50:
+            recent_df = recent_df.tail(50)
+        
+        return recent_df
+    else:
+        return df
 
 # Load the trade history
 df = load_trade_history()
@@ -117,13 +132,28 @@ else:
         col2.metric("P&L", f"${pnl:.2f}", f"{pnl_pct:+.2f}%")
         col3.metric("Total Trades", len(display_df))
         
+        # Show risk profile information if available
+        if 'risk_profile' in display_df.columns and not display_df.empty:
+            # Get the risk profile from the most recent trade
+            latest_risk_profile = display_df['risk_profile'].iloc[-1] if not pd.isna(display_df['risk_profile'].iloc[-1]) else "Not specified"
+            st.info(f"Risk Profile: **{latest_risk_profile.capitalize()}**")
+        
         # Show recent trades
         st.subheader("Recent Trades")
-        recent_trades = display_df.tail(10)[['timestamp', 'asset', 'decision', 'portfolio_value']].copy()
-        recent_trades = recent_trades.rename(columns={
-            'portfolio_value': 'Portfolio Value ($)',
-            'decision': 'Decision'
-        })
+        # Include risk profile if available in the data
+        if 'risk_profile' in display_df.columns:
+            recent_trades = display_df.tail(10)[['timestamp', 'asset', 'decision', 'portfolio_value', 'risk_profile']].copy()
+            recent_trades = recent_trades.rename(columns={
+                'portfolio_value': 'Portfolio Value ($)',
+                'decision': 'Decision',
+                'risk_profile': 'Risk Profile'
+            })
+        else:
+            recent_trades = display_df.tail(10)[['timestamp', 'asset', 'decision', 'portfolio_value']].copy()
+            recent_trades = recent_trades.rename(columns={
+                'portfolio_value': 'Portfolio Value ($)',
+                'decision': 'Decision'
+            })
         st.dataframe(recent_trades)
         
         # Show statistics for the trading period
@@ -136,6 +166,14 @@ else:
         stats_col1.metric("Total Return", f"{total_return:+.2f}%")
         stats_col2.metric("Max Value", f"${max_value:.2f}")
         stats_col3.metric("Min Value", f"${min_value:.2f}")
+
+        # Calculate and display trading time
+        if not df.empty:
+            start_time = df['timestamp'].min()
+            end_time = df['timestamp'].max()
+            trading_duration = end_time - start_time
+            trading_minutes = int(trading_duration.total_seconds() / 60)
+            st.info(f"Trading Duration: **{trading_minutes} minutes**")
 
         # Show initial allocation if present
         if 'INITIAL_ALLOCATION' in df['asset'].values:
