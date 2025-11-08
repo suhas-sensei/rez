@@ -18,18 +18,18 @@ simulation_state = {
 def initialize_simulation(starting_funds=None):
     """Initialize the simulation environment"""
     global simulation_state
-
+    
     if starting_funds is not None:
         simulation_state['portfolio_value'] = starting_funds
     else:
         config = load_config()
         simulation_state['portfolio_value'] = config['starting_funds']
-
+    
     simulation_state['positions'] = {}
     simulation_state['trade_history'] = []
     simulation_state['initialized'] = True
     simulation_state['initial_allocation_done'] = False  # Reset allocation status
-
+    
     print(f"Simulation initialized with ${simulation_state['portfolio_value']:.2f}")
 
 def get_portfolio_value():
@@ -50,25 +50,25 @@ def execute_trade_simulation(asset, decision):
     This function now properly handles trading decisions by buying/selling portions of positions
     """
     global simulation_state
-
+    
     if not simulation_state['initialized']:
         initialize_simulation()
-
+    
     # Record initial state
     initial_portfolio = simulation_state['portfolio_value']
-
+    
     # Get current position in this asset
-    current_position = simulation_state['positions'].get(asset, {'size': 0, 'entry_price': 1.0, 'usd_value': 0})
+    current_position = simulation_state['positions'].get(asset, {'size': 0, 'entry_price': 0, 'usd_value': 0})
     
     # Get cash balance
-    cash = simulation_state.get('cash', initial_portfolio * 0.3)  # Default to 30% of portfolio as cash
-
+    cash = simulation_state.get('cash', initial_portfolio * 0.1)  # Default to 10% of portfolio as cash
+    
     # Determine position sizing based on risk profile (this information could be passed from config)
     # For now we'll use a default position sizing
     config = load_config()
     risk_per_trade = config.get('default_risk_per_trade', 0.02)  # Default 2% risk per trade
-    position_size_limit = config.get('default_position_size_limit', 0.10)  # Default 10% of portfolio
-
+    position_size_limit = config.get('default_position_size_limit', 0.02)  # Default 2% of portfolio
+    
     # Calculate position value changes based on market movement
     # First, simulate the market movement for this asset
     if decision.lower() in ['buy', 'long']:
@@ -84,60 +84,54 @@ def execute_trade_simulation(asset, decision):
     else:
         # Default random movement
         market_movement = random.uniform(-0.015, 0.015)  # -1.5% to +1.5% movement
-
-    # Get the current position details
-    position_size = current_position['size']
-    entry_price = current_position['entry_price']
     
     # Calculate new price based on market movement
-    current_price = entry_price
+    current_price = current_position.get('entry_price', 1.0)
     new_price = current_price * (1 + market_movement)
-
-    # Update existing position value based on new price (before executing trade)
-    current_usd_value = position_size * new_price
-
-    # Execute the trading decision by adjusting position size
-    if decision.lower() in ['buy', 'long'] and cash > 0:
+    
+    # Calculate new position value based on new price
+    position_size = current_position.get('size', 0)
+    if position_size == 0 and decision.lower() in ['buy', 'long']:
+        # If we're buying and have no position, calculate based on available cash and position sizing
+        max_position_value = initial_portfolio * position_size_limit
+        position_size = min(cash * 0.5, max_position_value)  # Use 50% of available cash or position limit
+        new_usd_value = position_size
+    else:
+        # Update existing position value based on new price
+        new_usd_value = position_size * (new_price / current_price) if current_price > 0 else position_size
+    
+    # Execute the trading decision
+    if decision.lower() in ['buy', 'long'] and cash > new_usd_value:
         # Execute buy: increase position size using cash
-        buy_amount = min(cash * 0.2, initial_portfolio * position_size_limit * 0.5)  # Buy up to 20% of cash or 50% of position limit
-        additional_size = buy_amount / new_price if new_price > 0 else 0
-        position_size += additional_size
-        cash -= buy_amount
+        additional_size = min(cash * 0.1, initial_portfolio * position_size_limit * 0.5)  # Buy 10% of cash or 50% of position limit
+        new_usd_value = current_usd_value + additional_size
+        simulation_state['cash'] = cash - additional_size
+        position_size = position_size + additional_size/current_price if current_price > 0 else position_size
     elif decision.lower() in ['sell', 'short'] and position_size > 0:
         # Execute sell: reduce position size, increase cash
-        sell_fraction = 0.3  # Sell 30% of position
-        sell_size = position_size * sell_fraction
-        sell_amount = sell_size * new_price  # Amount of cash received from selling
-        
-        position_size -= sell_size
-        cash += sell_amount
+        sell_amount = min(position_size * 0.3, new_usd_value * 0.3)  # Sell 30% of position
+        new_usd_value = current_usd_value - sell_amount
+        simulation_state['cash'] = cash + sell_amount
+        position_size = position_size - sell_amount/current_price if current_price > 0 else position_size
     
-    # Ensure no negative values
-    position_size = max(0, position_size)
-    cash = max(0, cash)
-    current_usd_value = position_size * new_price if position_size > 0 else 0
-
     # Update the position with the new calculated values
     simulation_state['positions'][asset] = {
-        'size': position_size,
-        'entry_price': new_price,  # Update entry price to current market price
-        'usd_value': current_usd_value
+        'size': max(0, position_size),  # Ensure no negative position size
+        'entry_price': new_price,
+        'usd_value': max(0, new_usd_value)  # Ensure no negative value
     }
     
-    # Update cash in simulation state
-    simulation_state['cash'] = cash
-
     # Calculate total portfolio value based on all positions + cash
     total_value = simulation_state.get('cash', 0)
     for asset_name, position in simulation_state['positions'].items():
-        total_value += position.get('usd_value', 0)
-
+        total_value += max(0, position.get('usd_value', 0))
+    
     simulation_state['portfolio_value'] = total_value
-
+    
     # Calculate PnL
     pnl = simulation_state['portfolio_value'] - initial_portfolio
     pnl_percentage = (pnl / initial_portfolio) * 100 if initial_portfolio > 0 else 0
-
+    
     # Create trade record
     trade_record = {
         'timestamp': datetime.now().isoformat(),
@@ -148,9 +142,9 @@ def execute_trade_simulation(asset, decision):
         'pnl': pnl,
         'pnl_percentage': pnl_percentage
     }
-
+    
     simulation_state['trade_history'].append(trade_record)
-
+    
     result = {
         'status': 'success',
         'executed_decision': decision,
@@ -160,7 +154,7 @@ def execute_trade_simulation(asset, decision):
         'pnl_percentage': pnl_percentage,
         'timestamp': trade_record['timestamp']
     }
-
+    
     return result
 
 def execute_initial_allocation_simulation(assets, allocation_data):
@@ -168,18 +162,18 @@ def execute_initial_allocation_simulation(assets, allocation_data):
     Execute initial asset allocation based on allocation percentages
     """
     global simulation_state
-
+    
     if not simulation_state['initialized']:
         initialize_simulation()
-
+    
     initial_portfolio = simulation_state['portfolio_value']
     remaining_portfolio = initial_portfolio
-
+    
     for asset in assets:
         if asset in allocation_data:
             allocation_percentage = allocation_data[asset]
             allocation_amount = initial_portfolio * allocation_percentage
-
+            
             # Update position for this asset
             if asset not in simulation_state['positions']:
                 simulation_state['positions'][asset] = {
@@ -190,14 +184,14 @@ def execute_initial_allocation_simulation(assets, allocation_data):
             else:
                 simulation_state['positions'][asset]['size'] += allocation_amount
                 simulation_state['positions'][asset]['usd_value'] += allocation_amount
-
+            
             # Deduct from remaining portfolio
             remaining_portfolio -= allocation_amount
-
+    
     # Store remaining as cash
     simulation_state['cash'] = remaining_portfolio
     simulation_state['portfolio_value'] = initial_portfolio  # Total value remains the same
-
+    
     # Record initial allocation trade
     trade_record = {
         'timestamp': datetime.now().isoformat(),
@@ -209,10 +203,10 @@ def execute_initial_allocation_simulation(assets, allocation_data):
         'pnl_percentage': 0,
         'allocation_breakdown': allocation_data
     }
-
+    
     simulation_state['trade_history'].append(trade_record)
     mark_initial_allocation_done()
-
+    
     result = {
         'status': 'success',
         'executed_decision': 'ALLOCATE',
@@ -223,7 +217,7 @@ def execute_initial_allocation_simulation(assets, allocation_data):
         'allocation_breakdown': allocation_data,
         'timestamp': trade_record['timestamp']
     }
-
+    
     print(f"Initial allocation completed: {allocation_data}")
     return result
 
@@ -245,18 +239,18 @@ def get_portfolio_allocation():
     total_value = simulation_state['portfolio_value']
     if total_value <= 0:
         return {}
-
+    
     allocation = {}
     positions = simulation_state['positions']
-
+    
     for asset, position in positions.items():
         if 'usd_value' in position:
             allocation[asset] = position['usd_value'] / total_value
         else:
             # Estimate value if not directly stored
             allocation[asset] = (position['size'] * position.get('entry_price', 1.0)) / total_value
-
+            
     cash_pct = get_cash_balance() / total_value
     allocation['CASH'] = cash_pct
-
+    
     return allocation

@@ -74,7 +74,8 @@ class QuantIndicatorCalculator:
         stoch_data = self._calculate_stochastic(high_prices, low_prices, close_prices)
         bb_width = bb_data['upper'] - bb_data['lower']
         bb_position = (close_prices[-1] - bb_data['lower']) / (bb_width) if bb_width != 0 and bb_width is not None else 0.5
-        
+        volatility = np.std(np.diff(close_prices) / close_prices[:-1]) if len(close_prices) > 1 else 0.0
+
         return {
             'rsi': rsi,
             'macd': macd_data,
@@ -85,7 +86,8 @@ class QuantIndicatorCalculator:
             'bb_width': bb_width,
             'bb_position': bb_position,
             'current_price': float(close_prices[-1]),
-            'volume': float(volume[-1]) if len(volume) > 0 else 0.0
+            'volume': float(volume[-1]) if len(volume) > 0 else 0.0,
+            'volatility': float(volatility)
         }
     
     def _calculate_rsi(self, prices: np.array, period: int = 14) -> float:

@@ -5,16 +5,40 @@ import plotly.graph_objects as go
 import json
 from datetime import datetime
 import os
+import threading
+import time
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-st.title("Performance Dashboard")
+from main import run_trading_session, stop_trading_session
+
+# Check if session log file is already in session state, if not create it
+if 'session_log_file' not in st.session_state:
+    # Generate a unique session log file name with timestamp when first loaded
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    st.session_state.session_log_file = f'trades_log_{current_time}.jsonl'
+    # Initialize the new session log file
+    with open(st.session_state.session_log_file, 'w') as f:
+        pass  # Create empty file
+
+
+# Initialize session state
+if 'trading_status' not in st.session_state:
+    st.session_state.trading_status = 'stopped'  # 'stopped', 'running'
+if 'latest_data' not in st.session_state:
+    st.session_state.latest_data = None
+
 
 # Load trade history from log file
 def load_trade_history():
-    if not os.path.exists('trades_log.jsonl'):
+    # Get the session log file from session state
+    session_file = st.session_state.get('session_log_file', 'trades_log.jsonl')
+    if not os.path.exists(session_file):
         return pd.DataFrame()
     
     trades = []
-    with open('trades_log.jsonl', 'r') as f:
+    with open(session_file, 'r') as f:
         for line in f:
             try:
                 trade = json.loads(line.strip())
@@ -26,34 +50,109 @@ def load_trade_history():
         return pd.DataFrame()
     
     df = pd.DataFrame(trades)
-    df['timestamp'] = pd.to_datetime(df['timestamp'], format='ISO8601')
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
     df = df.sort_values('timestamp').reset_index(drop=True)
     
     # Calculate cumulative portfolio value
     df['cumulative_portfolio'] = df['portfolio_value'].expanding().max()
     
-    # Only show the most recent trading session (last 2 hours of data or last 50 trades, whichever is smaller)
-    # This ensures fresh data is displayed for each run
-    if len(df) > 0:
-        # Get the most recent timestamp
-        latest_time = df['timestamp'].max()
-        # Filter to show only data from the last 2 hours (or all if less than 2 hours of data)
-        time_threshold = latest_time - pd.Timedelta(hours=2)
-        recent_df = df[df['timestamp'] >= time_threshold]
-        
-        # If more than 50 recent trades, show only the last 50
-        if len(recent_df) > 50:
-            recent_df = recent_df.tail(50)
-        
-        return recent_df
-    else:
-        return df
+    # For session-specific logs, show all data for this session
+    return df
 
-# Load the trade history
+
+# Function to run the trading session in a separate thread
+def start_trading_session(risk_profile, starting_funds, trading_duration, session_log_file):
+    # st.session_state.trading_status is already set to 'running' before thread starts
+    # Create a fresh log file for this session
+    with open(session_log_file, 'w') as f:
+        pass  # Create empty file
+    # Set the environment variable to use the session-specific log file
+    import os
+    os.environ['TRADES_LOG_FILE'] = session_log_file
+    try:
+        final_value = run_trading_session(
+            risk_profile=risk_profile,
+            starting_funds=starting_funds,
+            trading_duration_minutes=trading_duration
+        )
+        # Only update status to stopped if we're still running (not already stopped by user)
+        if st.session_state.trading_status == 'running':
+            st.session_state.trading_status = 'stopped'
+        # Note: The success message won't work in a thread, so it's handled in the GUI
+    except Exception as e:
+        # Only update status to stopped if we're still running (not already stopped by user)
+        if st.session_state.trading_status == 'running':
+            st.session_state.trading_status = 'stopped'
+        # Note: The error message won't work in a thread, so it's handled in the GUI
+    finally:
+        # Clean up the environment variable
+        if 'TRADES_LOG_FILE' in os.environ:
+            del os.environ['TRADES_LOG_FILE']
+
+
+# Streamlit UI
+st.title("AI Trading Agent Dashboard")
+
+# Sidebar controls
+st.sidebar.header("Trading Configuration")
+risk_profile = st.sidebar.selectbox(
+    "Risk Profile",
+    options=['low', 'medium', 'high'],
+    index=1,
+    help="Select the risk level for trading strategy"
+)
+
+initial_balance = st.sidebar.number_input(
+    "Initial Balance ($)",
+    min_value=100.0,
+    max_value=100000.0,
+    value=1000.0,
+    step=100.0,
+    help="Starting amount for the trading simulation"
+)
+
+trading_duration = st.sidebar.slider(
+    "Trading Duration (minutes)",
+    min_value=1,
+    max_value=240,
+    value=60,
+    help="How long the trading session should run"
+)
+
+# Start/Stop buttons
+if st.session_state.trading_status == 'stopped':
+    if st.sidebar.button("🚀 Start Trading", type="primary"):
+        # Clear the log file to ensure fresh data for each run
+        if os.path.exists('trades_log.jsonl'):
+            os.remove('trades_log.jsonl')
+        st.session_state.trading_status = 'running'  # Set status before starting thread to prevent multiple starts
+        # Start trading in a separate thread, passing the session log file
+        thread = threading.Thread(
+            target=start_trading_session,
+            args=(risk_profile, initial_balance, trading_duration, st.session_state.session_log_file)
+        )
+        thread.daemon = True  # Set as daemon thread to ensure it stops when main process stops
+        thread.start()
+        st.rerun()
+elif st.session_state.trading_status == 'running':
+    if st.sidebar.button("🛑 Stop Trading", type="secondary"):
+        # Call the stop function to signal the trading session to stop in the terminal too
+        stop_trading_session()
+        st.session_state.trading_status = 'stopped'
+        st.success("Trading session stopped by user.")
+        st.rerun()
+    st.sidebar.info("Trading in progress...")
+
+# Show current status
+if st.session_state.trading_status == 'running':
+    st.info("Trading session is currently running. Click 'Refresh Data' to update the dashboard.")
+
+# Load and display the trade history
 df = load_trade_history()
 
 if df.empty:
-    st.warning("No trade data available. Please run the trading agent to generate data.")
+    st.warning("No trade data available. Configure your trading parameters and click 'Start Trading' to begin.")
+    st.info("💡 Tip: Select your risk profile, initial balance, and trading duration in the sidebar, then click 'Start Trading'.")
 else:
     # Find the first actual trading decision (not initial allocation)
     # Filter to show only trades with PnL details (real trading activity)
@@ -81,7 +180,7 @@ else:
         st.warning("No trading data to display after initial allocation.")
     else:
         # Create the main portfolio value chart
-        st.subheader("Portfolio Value Over Time")
+        st.subheader("📈 Portfolio Value Over Time")
         
         fig = px.line(display_df, x='timestamp', y='portfolio_value', 
                      title='Simulated Portfolio Value Over Time',
@@ -119,7 +218,7 @@ else:
             hovermode='x unified'
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         
         # Show latest portfolio value
         latest_value = display_df['portfolio_value'].iloc[-1]
@@ -186,5 +285,9 @@ else:
                     for asset, percentage in allocation_data.items():
                         st.write(f"{asset}: {percentage*100:.1f}%")
 
-st.sidebar.header("Controls")
-st.sidebar.info("Run the trading agent to generate data for this dashboard")
+# Refresh button
+if st.sidebar.button("🔄 Refresh Data"):
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.info("Configure your trading parameters in the sidebar and click 'Start Trading' to begin the simulation.")

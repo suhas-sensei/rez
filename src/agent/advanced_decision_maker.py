@@ -85,7 +85,8 @@ class AdvancedTradingAlgorithm:
             macd_hist = macd_hist
             # Simplified CCI
             typical_price = (high + low + close) / 3
-            cci = (typical_price - typical_price.rolling(20).mean()) / (0.015 * typical_price.rolling(20).std())
+            typical_price_series = pd.Series(typical_price)
+            cci = (typical_price_series - typical_price_series.rolling(20).mean()) / (0.015 * typical_price_series.rolling(20).std())
             roc = pd.Series(close).pct_change(10) * 100
             # Simplified ATR
             tr = pd.Series([max(h - l, abs(h - c_prev), abs(l - c_prev)) for h, l, c, c_prev in 

@@ -4,6 +4,7 @@ Implements risk-based asset classification and dynamic universe selection
 """
 import pandas as pd
 import numpy as np
+import requests
 from datetime import datetime, timedelta
 import json
 import os
@@ -99,13 +100,18 @@ class AssetClassifier:
         Build risk-based universes from a list of assets
         """
         if assets_list is None:
-            # Default crypto universe
+            # Default crypto universe - expanded list based on market cap
             assets_list = [
-                'BTC', 'ETH', 'SOL', 'AVAX', 'ADA', 'DOT', 'LINK', 'MATIC', 
-                'UNI', 'LTC', 'BCH', 'ETC', 'XLM', 'TRX', 'DOGE', 'XRP', 
-                'ATOM', 'NEAR', 'APT', 'ARB', 'PEPE', 'SHIB', 'POL', 'XMR', 
-                'ALGO', 'XTZ', 'BCH', 'BSV', 'DGB', 'RVN', 'ZEC', 'ENJ', 
-                'MANA', 'SAND', 'AAVE', 'CRV', 'COMP', 'MKR', 'YFI', 'SNX'
+                # Large cap (low risk)
+                'BTC', 'ETH', 'USDT', 'BNB', 'SOL', 'XRP', 'USDC', 'ADA', 'AVAX', 'DOGE',
+                'DOT', 'TON', 'LINK', 'MATIC', 'BCH', 'LTC', 'TRX', 'SHIB', 'ETC', 'UNI',
+                # Mid cap (medium risk)
+                'ATOM', 'NEAR', 'APT', 'ARB', 'PEPE', 'POL', 'XMR', 'ALGO', 'XTZ', 'BSV',
+                'DGB', 'RVN', 'ZEC', 'ENJ', 'MANA', 'SAND', 'AAVE', 'CRV', 'COMP', 'MKR',
+                'YFI', 'SNX', 'FIL', 'HBAR', 'ICP', 'VET', 'SUI', 'STX', 'FET', 'FLOW',
+                # Small cap (high risk)
+                'GRT', 'CHZ', 'THETA', 'AXS', 'FTM', 'LDO', 'INJ', 'RUNE', 'CAKE', 'QNT',
+                'EGLD', 'AGIX', 'TIA', 'KSM', 'MINA', 'ROSE', 'JUP', 'PYTH', 'STRK', 'WIF'
             ]
         
         universes = {

@@ -1,1 +1,17 @@
-{"low": [], "medium": [], "high": ["BTC", "ETH", "SOL", "AVAX", "ADA", "DOT", "LINK", "MATIC", "UNI", "LTC", "BCH", "ETC", "XLM", "TRX", "DOGE", "XRP", "ATOM", "NEAR", "APT", "ARB", "PEPE", "SHIB", "POL", "XMR", "ALGO", "XTZ", "BCH", "BSV", "DGB", "RVN", "ZEC", "ENJ", "MANA", "SAND", "AAVE", "CRV", "COMP", "MKR", "YFI", "SNX"]}
+{
+  "low": [
+    "BTC", "ETH", "USDT", "BNB", "XRP", "USDC", "ADA", "DOGE", "DOT", "TON"
+  ],
+  "medium": [
+    "SOL", "AVAX", "LINK", "MATIC", "BCH", "LTC", "TRX", "ETC", "UNI", "ATOM", 
+    "NEAR", "APT", "ARB", "POL", "XMR", "ALGO", "XTZ", "BSV", "DGB", "RVN", 
+    "ZEC", "ENJ", "MANA", "SAND", "AAVE", "CRV", "COMP", "MKR", "YFI", "SNX", 
+    "FIL", "HBAR", "ICP", "VET", "SUI", "STX", "FET", "FLOW", "GRT", "CHZ", 
+    "THETA", "AXS", "FTM", "LDO", "INJ", "RUNE", "CAKE", "QNT", "EGLD", "AGIX"
+  ],
+  "high": [
+    "PEPE", "SHIB", "MINA", "ROSE", "JUP", "PYTH", "STRK", "WIF", "TIA", "KSM", 
+    "TWT", "FDUSD", "APT", "SEI", "ORDI", "W", "ONDO", "WLD", "BGB", "PYTH", 
+    "IO", "PONKE", "MOODENG", "MOTHER", "DOGS", "BOME", "AERO", "ZK", "ACE", "TAO"
+  ]
+}
