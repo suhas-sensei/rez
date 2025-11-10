@@ -91,7 +91,7 @@ def start_trading_session(risk_profile, starting_funds, trading_duration, sessio
 
 
 # Streamlit UI
-st.title("AI Trading Agent Dashboard")
+st.title("Dashboard")
 
 # Sidebar controls
 st.sidebar.header("Trading Configuration")
@@ -183,7 +183,7 @@ else:
         st.subheader("📈 Portfolio Value Over Time")
         
         fig = px.line(display_df, x='timestamp', y='portfolio_value', 
-                     title='Simulated Portfolio Value Over Time',
+                     title='',
                      labels={'portfolio_value': 'Portfolio Value ($)', 'timestamp': 'Time'})
         
         # Add a vertical line to indicate where trading began if we have PnL data
