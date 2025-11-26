@@ -22,13 +22,13 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap');
     @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
     
-    /* Global Styles */
+    /* Global Styles - Default to Dark Theme for Main Content */
     .stApp {
         background-color: #0a0a0a;
         color: #e8e8e8;
     }
     
-    /* Typography */
+    /* Typography - Default to White for Main Content */
     h1, h2, h3, h4, h5, h6 {
         font-family: 'Instrument Serif', serif !important;
         color: #ffffff;
@@ -46,10 +46,14 @@ st.markdown("""
         letter-spacing: -0.02em;
     }
     
-    /* Fixed Sidebar */
+    /* =========================================
+       SIDEBAR STYLES (LIGHT THEME)
+       ========================================= */
+    
+    /* Fixed Sidebar Container */
     [data-testid="stSidebar"] {
-        background-color: #111111;
-        border-right: 1px solid #2a2a2a;
+        background-color: #ffffff;
+        border-right: 1px solid #e5e5e5;
         position: fixed !important;
         height: 100vh !important;
         top: 0;
@@ -60,139 +64,133 @@ st.markdown("""
         z-index: 999990;
     }
     
-    /* Main content should account for fixed sidebar */
+    /* Sidebar Headers */
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: #000000 !important;
+    }
+    
+    /* Sidebar Text/Labels */
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .stMarkdown p,
+    [data-testid="stSidebar"] .stWidgetLabel {
+        color: #000000 !important;
+    }
+    
+    /* Sidebar Inputs */
+    [data-testid="stSidebar"] .stSelectbox > div > div,
+    [data-testid="stSidebar"] .stNumberInput input {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        border: 1px solid #000000 !important;
+    }
+
+    /* Sidebar Slider - No Border */
+    [data-testid="stSidebar"] .stSlider {
+        color: #000000 !important;
+    }
+    
+    /* Sidebar Selectbox SVG Icon */
+    [data-testid="stSidebar"] .stSelectbox svg {
+        fill: #000000 !important;
+    }
+    
+    /* Sidebar Buttons */
+    [data-testid="stSidebar"] .stButton > button {
+        background-color: #000000;
+        color: #ffffff;
+        border: none;
+    }
+    
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background-color: #333333;
+        color: #ffffff;
+    }
+    
+    [data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+        background-color: #ffffff;
+        color: #000000;
+        border: 1px solid #e5e5e5;
+    }
+    
+    [data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+        background-color: #f5f5f5;
+        color: #000000;
+    }
+    
+    /* Sidebar Info/Alerts */
+    [data-testid="stSidebar"] .stAlert {
+        background-color: #ffffff;
+        border: 1px solid #e5e5e5;
+        color: #000000 !important;
+    }
+    
+    [data-testid="stSidebar"] .stAlert p {
+        color: #000000 !important;
+    }
+    
+    /* =========================================
+       MAIN CONTENT STYLES (DARK THEME)
+       ========================================= */
+       
+    /* Main content positioning */
     [data-testid="stMain"] {
         margin-left: 15% !important;
         max-width: 75% !important;
     }
     
-    [data-testid="stSidebar"] h2 {
-        color: #ffffff;
-        font-size: 1.5rem;
-        margin-bottom: 1.5rem;
+    /* Main Content Metrics */
+    [data-testid="stMain"] [data-testid="stMetricValue"] {
+        color: #ffffff !important;
     }
     
-    /* Inputs and Selects */
-    .stSelectbox, .stNumberInput, .stSlider {
-        color: #e8e8e8;
+    [data-testid="stMain"] [data-testid="stMetricLabel"] {
+        color: #999999 !important;
     }
     
-    .stSelectbox > div > div {
+    /* Main Content Alerts/Info */
+    [data-testid="stMain"] .stAlert {
+        background-color: #1a1a1a;
+        border: 1px solid #2a2a2a;
+        color: #e8e8e8 !important;
+    }
+    
+    [data-testid="stMain"] .stAlert p {
+        color: #e8e8e8 !important;
+    }
+    
+    /* Main Content Dataframes */
+    [data-testid="stMain"] .dataframe {
         background-color: #1a1a1a;
         color: #e8e8e8;
-        border: 1px solid #333333;
+        border: 1px solid #2a2a2a;
     }
     
-    /* Hide the vertical line separator in selectbox */
+    [data-testid="stMain"] .dataframe th {
+        background-color: #0a0a0a;
+        color: #999999;
+    }
+    
+    [data-testid="stMain"] .dataframe td {
+        border-color: #2a2a2a;
+    }
+    
+    /* Main Content Subheaders */
+    [data-testid="stMain"] h2, [data-testid="stMain"] h3 {
+        border-bottom: 1px solid #2a2a2a;
+    }
+    
+    /* Hide the vertical line separator in selectbox (Global) */
     .stSelectbox [data-baseweb="select"] > div > div:last-child {
         display: none !important;
     }
     
-    .stSelectbox svg {
+    /* Completely hide the sidebar collapse button */
+    [data-testid="stSidebarCollapseButton"], [data-testid="collapsedControl"] {
         display: none !important;
     }
     
-    /* Completely hide the sidebar collapse button to ensure it's not accessible */
-    [data-testid="stSidebarCollapseButton"] {
-        display: none !important;
-    }
-    
-    /* Hide sidebar collapse button for different Streamlit versions */
-    [data-testid="collapsedControl"] {
-        display: none !important;
-    }
-    
-    input {
-        background-color: #1a1a1a !important;
-        color: #e8e8e8 !important;
-        border: 1px solid #333333 !important;
-    }
-    
-    /* Buttons */
-    .stButton > button {
-        background-color: #ffffff;
-        color: #0a0a0a;
-        border: none;
-        font-weight: 600;
-        padding: 0.75rem 2rem;
-        border-radius: 4px;
-        transition: all 0.2s ease;
-    }
-    
-    .stButton > button:hover {
-        background-color: #e8e8e8;
-        transform: translateY(-1px);
-    }
-    
-    .stButton > button[kind="secondary"] {
-        background-color: #2a2a2a;
-        color: #ffffff;
-        border: 1px solid #444444;
-    }
-    
-    .stButton > button[kind="secondary"]:hover {
-        background-color: #333333;
-    }
-    
-    /* Metrics */
-    [data-testid="stMetricValue"] {
-        font-family: 'Inter', sans-serif !important;
-        font-size: 2rem;
-        font-weight: 600;
-        color: #ffffff;
-    }
-    
-    [data-testid="stMetricLabel"] {
-        font-family: 'Inter', sans-serif !important;
-        font-size: 0.875rem;
-        color: #999999;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-    
-    [data-testid="stMetricDelta"] {
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 500;
-    }
-    
-    /* Info/Warning boxes */
-    .stAlert {
-        background-color: #1a1a1a;
-        border: 1px solid #2a2a2a;
-        color: #e8e8e8;
-    }
-    
-    /* Dataframe/Table */
-    .dataframe {
-        background-color: #1a1a1a;
-        color: #e8e8e8;
-        border: 1px solid #2a2a2a;
-    }
-    
-    .dataframe th {
-        background-color: #0a0a0a;
-        color: #999999;
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.05em;
-    }
-    
-    .dataframe td {
-        border-color: #2a2a2a;
-    }
-    
-    /* Divider */
-    hr {
-        border-color: #2a2a2a;
-    }
-    
-    /* Subheaders */
-    .stMarkdown h2, .stMarkdown h3 {
-        border-bottom: 1px solid #2a2a2a;
-        padding-bottom: 0.5rem;
-        margin-top: 2rem;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -399,7 +397,8 @@ else:
                     text="Trading Start",
                     showarrow=False,
                     xanchor="left",
-                    yanchor="bottom"
+                    yanchor="bottom",
+                    font=dict(color="#ffffff")
                 )
             
             fig.update_layout(
