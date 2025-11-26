@@ -202,6 +202,8 @@ if 'session_log_file' not in st.session_state:
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     st.session_state.session_log_file = f'trade_log/trades_log_{current_time}.jsonl'
     # Initialize the new session log file
+    # Ensure the directory exists
+    os.makedirs('trade_log', exist_ok=True)
     with open(st.session_state.session_log_file, 'w') as f:
         pass  # Create empty file
 
