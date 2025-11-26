@@ -13,6 +13,189 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from main import run_trading_session, stop_trading_session
 
+# Configure the page to have a fixed sidebar
+st.set_page_config(layout="wide", initial_sidebar_state="expanded")
+
+# Rezlabs Theme - Custom CSS
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+    
+    /* Global Styles */
+    .stApp {
+        background-color: #0a0a0a;
+        color: #e8e8e8;
+    }
+    
+    /* Typography */
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Instrument Serif', serif !important;
+        color: #ffffff;
+        font-weight: 400;
+    }
+    
+    p, div, span, label, input, button {
+        font-family: 'Inter', sans-serif !important;
+    }
+    
+    /* Main Title */
+    h1 {
+        font-size: 2.5rem;
+        margin-bottom: 2rem;
+        letter-spacing: -0.02em;
+    }
+    
+    /* Fixed Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #111111;
+        border-right: 1px solid #2a2a2a;
+        position: fixed !important;
+        height: 100vh !important;
+        top: 0;
+        left: 0;
+        max-width: 15%;
+        min-width: 15%;
+        width: 15%;
+        z-index: 999990;
+    }
+    
+    /* Main content should account for fixed sidebar */
+    [data-testid="stMain"] {
+        margin-left: 15% !important;
+        max-width: 75% !important;
+    }
+    
+    [data-testid="stSidebar"] h2 {
+        color: #ffffff;
+        font-size: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Inputs and Selects */
+    .stSelectbox, .stNumberInput, .stSlider {
+        color: #e8e8e8;
+    }
+    
+    .stSelectbox > div > div {
+        background-color: #1a1a1a;
+        color: #e8e8e8;
+        border: 1px solid #333333;
+    }
+    
+    /* Hide the vertical line separator in selectbox */
+    .stSelectbox [data-baseweb="select"] > div > div:last-child {
+        display: none !important;
+    }
+    
+    .stSelectbox svg {
+        display: none !important;
+    }
+    
+    /* Completely hide the sidebar collapse button to ensure it's not accessible */
+    [data-testid="stSidebarCollapseButton"] {
+        display: none !important;
+    }
+    
+    /* Hide sidebar collapse button for different Streamlit versions */
+    [data-testid="collapsedControl"] {
+        display: none !important;
+    }
+    
+    input {
+        background-color: #1a1a1a !important;
+        color: #e8e8e8 !important;
+        border: 1px solid #333333 !important;
+    }
+    
+    /* Buttons */
+    .stButton > button {
+        background-color: #ffffff;
+        color: #0a0a0a;
+        border: none;
+        font-weight: 600;
+        padding: 0.75rem 2rem;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    }
+    
+    .stButton > button:hover {
+        background-color: #e8e8e8;
+        transform: translateY(-1px);
+    }
+    
+    .stButton > button[kind="secondary"] {
+        background-color: #2a2a2a;
+        color: #ffffff;
+        border: 1px solid #444444;
+    }
+    
+    .stButton > button[kind="secondary"]:hover {
+        background-color: #333333;
+    }
+    
+    /* Metrics */
+    [data-testid="stMetricValue"] {
+        font-family: 'Inter', sans-serif !important;
+        font-size: 2rem;
+        font-weight: 600;
+        color: #ffffff;
+    }
+    
+    [data-testid="stMetricLabel"] {
+        font-family: 'Inter', sans-serif !important;
+        font-size: 0.875rem;
+        color: #999999;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    [data-testid="stMetricDelta"] {
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 500;
+    }
+    
+    /* Info/Warning boxes */
+    .stAlert {
+        background-color: #1a1a1a;
+        border: 1px solid #2a2a2a;
+        color: #e8e8e8;
+    }
+    
+    /* Dataframe/Table */
+    .dataframe {
+        background-color: #1a1a1a;
+        color: #e8e8e8;
+        border: 1px solid #2a2a2a;
+    }
+    
+    .dataframe th {
+        background-color: #0a0a0a;
+        color: #999999;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+    }
+    
+    .dataframe td {
+        border-color: #2a2a2a;
+    }
+    
+    /* Divider */
+    hr {
+        border-color: #2a2a2a;
+    }
+    
+    /* Subheaders */
+    .stMarkdown h2, .stMarkdown h3 {
+        border-bottom: 1px solid #2a2a2a;
+        padding-bottom: 0.5rem;
+        margin-top: 2rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Check if session log file is already in session state, if not create it
 if 'session_log_file' not in st.session_state:
     # Generate a unique session log file name with timestamp when first loaded
@@ -91,7 +274,7 @@ def start_trading_session(risk_profile, starting_funds, trading_duration, sessio
 
 
 # Streamlit UI
-st.title("Dashboard")
+st.title("Rez Dashboard")
 
 # Sidebar controls
 st.sidebar.header("Trading Configuration")
@@ -182,89 +365,142 @@ else:
         # Create the main portfolio value chart
         st.subheader("📈 Portfolio Value Over Time")
         
-        fig = px.line(display_df, x='timestamp', y='portfolio_value', 
-                     title='',
-                     labels={'portfolio_value': 'Portfolio Value ($)', 'timestamp': 'Time'})
+        # Filter out any rows with NaN values in portfolio_value to prevent undefined in chart
+        filtered_df = display_df.dropna(subset=['portfolio_value'])
         
-        # Add a vertical line to indicate where trading began if we have PnL data
-        if not trading_df.empty and len(df[~df.index.isin(trading_df.index)]) > 0:  # If there are records without PnL data
-            # Show when actual trading with PnL calculation started
-            trading_start_time = trading_df['timestamp'].iloc[0]
-            fig.add_shape(
-                type="line",
-                x0=trading_start_time,
-                x1=trading_start_time,
-                y0=0,
-                y1=1,
-                yref="paper",  # Use 'paper' to span the entire y-axis
-                line=dict(
-                    dash="dash",
-                    color="red"
+        if filtered_df.empty:
+            st.warning("No valid data available for portfolio value chart.")
+        else:
+            fig = px.line(filtered_df, x='timestamp', y='portfolio_value',
+                         labels={'portfolio_value': 'Portfolio Value ($)', 'timestamp': 'Time'})
+            
+            # Add a vertical line to indicate where trading began if we have PnL data
+            if not trading_df.empty and len(df[~df.index.isin(trading_df.index)]) > 0:  # If there are records without PnL data
+                # Show when actual trading with PnL calculation started
+                trading_start_time = trading_df['timestamp'].iloc[0]
+                fig.add_shape(
+                    type="line",
+                    x0=trading_start_time,
+                    x1=trading_start_time,
+                    y0=0,
+                    y1=1,
+                    yref="paper",  # Use 'paper' to span the entire y-axis
+                    line=dict(
+                        dash="dash",
+                        color="#999999"
+                    )
                 )
+                fig.add_annotation(
+                    x=trading_start_time,
+                    y=1,
+                    yref="paper",
+                    text="Trading Start",
+                    showarrow=False,
+                    xanchor="left",
+                    yanchor="bottom"
+                )
+            
+            fig.update_layout(
+                xaxis_title='Time',
+                yaxis_title='Portfolio Value ($)',
+                hovermode='x unified',
+                # Rezlabs Theme - Dark monochrome styling
+                plot_bgcolor='#0a0a0a',
+                paper_bgcolor='#0a0a0a',
+                font=dict(
+                    family='Inter, sans-serif',
+                    size=12,
+                    color='#e8e8e8'
+                ),
+                xaxis=dict(
+                    gridcolor='#2a2a2a',
+                    linecolor='#444444',
+                    zerolinecolor='#444444'
+                ),
+                yaxis=dict(
+                    gridcolor='#2a2a2a',
+                    linecolor='#444444',
+                    zerolinecolor='#444444'
+                ),
+                title_text="",
+                margin=dict(t=30, l=10, r=10, b=10)
             )
-            fig.add_annotation(
-                x=trading_start_time,
-                y=1,
-                yref="paper",
-                text="Trading Start",
-                showarrow=False,
-                xanchor="left",
-                yanchor="bottom"
+            
+            # Update trace styling - white line for portfolio value
+            fig.update_traces(
+                line=dict(color='#ffffff', width=2),
+                hovertemplate='<b>%{x}</b><br>Portfolio: $%{y:,.2f}<extra></extra>'
             )
-        
-        fig.update_layout(
-            xaxis_title='Time',
-            yaxis_title='Portfolio Value ($)',
-            hovermode='x unified'
-        )
-        
-        st.plotly_chart(fig, width='stretch')
+            
+            st.plotly_chart(fig, width='stretch')
         
         # Show latest portfolio value
-        latest_value = display_df['portfolio_value'].iloc[-1]
-        initial_value = display_df['portfolio_value'].iloc[0] 
-        pnl = latest_value - initial_value
-        pnl_pct = (pnl / initial_value) * 100 if initial_value != 0 else 0
-        
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Latest Portfolio Value", f"${latest_value:.2f}")
-        col2.metric("P&L", f"${pnl:.2f}", f"{pnl_pct:+.2f}%")
-        col3.metric("Total Trades", len(display_df))
+        if not display_df.empty and 'portfolio_value' in display_df.columns:
+            latest_value = display_df['portfolio_value'].iloc[-1] if not pd.isna(display_df['portfolio_value'].iloc[-1]) else 0
+            initial_value = display_df['portfolio_value'].iloc[0] if not pd.isna(display_df['portfolio_value'].iloc[0]) else 0
+            pnl = latest_value - initial_value
+            pnl_pct = (pnl / initial_value) * 100 if initial_value != 0 else 0
+            
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Latest Portfolio Value", f"${latest_value:.2f}")
+            col2.metric("P&L", f"${pnl:.2f}", f"{pnl_pct:+.2f}%")
+            col3.metric("Total Trades", len(display_df))
+        else:
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Latest Portfolio Value", "$0.00")
+            col2.metric("P&L", "$0.00", "0.00%")
+            col3.metric("Total Trades", "0")
         
         # Show risk profile information if available
         if 'risk_profile' in display_df.columns and not display_df.empty:
             # Get the risk profile from the most recent trade
             latest_risk_profile = display_df['risk_profile'].iloc[-1] if not pd.isna(display_df['risk_profile'].iloc[-1]) else "Not specified"
-            st.info(f"Risk Profile: **{latest_risk_profile.capitalize()}**")
+            if latest_risk_profile != "Not specified":
+                st.info(f"Risk Profile: **{latest_risk_profile.capitalize()}**")
+            else:
+                st.info(f"Risk Profile: **{latest_risk_profile}**")
         
         # Show recent trades
         st.subheader("Recent Trades")
-        # Include risk profile if available in the data
-        if 'risk_profile' in display_df.columns:
-            recent_trades = display_df.tail(10)[['timestamp', 'asset', 'decision', 'portfolio_value', 'risk_profile']].copy()
-            recent_trades = recent_trades.rename(columns={
-                'portfolio_value': 'Portfolio Value ($)',
-                'decision': 'Decision',
-                'risk_profile': 'Risk Profile'
-            })
+        if not display_df.empty:
+            # Include risk profile if available in the data
+            if 'risk_profile' in display_df.columns:
+                recent_trades = display_df.tail(10)[['timestamp', 'asset', 'decision', 'portfolio_value', 'risk_profile']].copy()
+                recent_trades = recent_trades.rename(columns={
+                    'portfolio_value': 'Portfolio Value ($)',
+                    'decision': 'Decision',
+                    'risk_profile': 'Risk Profile'
+                })
+            else:
+                recent_trades = display_df.tail(10)[['timestamp', 'asset', 'decision', 'portfolio_value']].copy()
+                recent_trades = recent_trades.rename(columns={
+                    'portfolio_value': 'Portfolio Value ($)',
+                    'decision': 'Decision'
+                })
+            # Clean any NaN values in the recent trades dataframe
+            recent_trades = recent_trades.fillna("N/A")
+            st.dataframe(recent_trades)
         else:
-            recent_trades = display_df.tail(10)[['timestamp', 'asset', 'decision', 'portfolio_value']].copy()
-            recent_trades = recent_trades.rename(columns={
-                'portfolio_value': 'Portfolio Value ($)',
-                'decision': 'Decision'
-            })
-        st.dataframe(recent_trades)
+            st.write("No recent trades to display.")
         
         # Show statistics for the trading period
         st.subheader("Performance Statistics (From First Trade)")
-        total_return = ((display_df['portfolio_value'].iloc[-1] / display_df['portfolio_value'].iloc[0]) - 1) * 100 if display_df['portfolio_value'].iloc[0] != 0 else 0
-        max_value = display_df['portfolio_value'].max()
-        min_value = display_df['portfolio_value'].min()
-        
-        stats_col1, stats_col2, stats_col3 = st.columns(3)
-        stats_col1.metric("Total Return", f"{total_return:+.2f}%")
-        stats_col2.metric("Max Value", f"${max_value:.2f}")
-        stats_col3.metric("Min Value", f"${min_value:.2f}")
+        if not display_df.empty and 'portfolio_value' in display_df.columns and len(display_df) > 0:
+            latest_pv = display_df['portfolio_value'].iloc[-1] if not pd.isna(display_df['portfolio_value'].iloc[-1]) else 0
+            initial_pv = display_df['portfolio_value'].iloc[0] if not pd.isna(display_df['portfolio_value'].iloc[0]) else 0
+            total_return = ((latest_pv / initial_pv) - 1) * 100 if initial_pv != 0 else 0
+            max_value = display_df['portfolio_value'].max() if not display_df['portfolio_value'].isna().all() else 0
+            min_value = display_df['portfolio_value'].min() if not display_df['portfolio_value'].isna().all() else 0
+            
+            stats_col1, stats_col2, stats_col3 = st.columns(3)
+            stats_col1.metric("Total Return", f"{total_return:+.2f}%")
+            stats_col2.metric("Max Value", f"${max_value:.2f}")
+            stats_col3.metric("Min Value", f"${min_value:.2f}")
+        else:
+            stats_col1, stats_col2, stats_col3 = st.columns(3)
+            stats_col1.metric("Total Return", "0.00%")
+            stats_col2.metric("Max Value", "$0.00")
+            stats_col3.metric("Min Value", "$0.00")
 
         # Calculate and display trading time
         if not df.empty:

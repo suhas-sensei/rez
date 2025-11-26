@@ -306,4 +306,3 @@ This fallback provides reliable trading decisions based on multiple technical in
 
 This project is open source and available under the MIT License.
 
-cd /home/tamoghna/rezlabs/hypeAI/hypeAI && source venv/bin/activate && python3 src/main.py --assets SOL ARB LINK DOGE APT PEPE --starting-funds 1000 --interval 1h --risk-profile high

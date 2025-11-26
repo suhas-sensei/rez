@@ -57,3 +57,4 @@ trades_log.jsonl
 .gitignore
 
 /home/tamoghna/rezlabs/rez1/hypeAI/.qwen
+AI_CONTEXT.md
