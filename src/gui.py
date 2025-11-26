@@ -200,7 +200,7 @@ st.markdown("""
 if 'session_log_file' not in st.session_state:
     # Generate a unique session log file name with timestamp when first loaded
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    st.session_state.session_log_file = f'trades_log_{current_time}.jsonl'
+    st.session_state.session_log_file = f'trade_log/trades_log_{current_time}.jsonl'
     # Initialize the new session log file
     with open(st.session_state.session_log_file, 'w') as f:
         pass  # Create empty file
@@ -216,7 +216,7 @@ if 'latest_data' not in st.session_state:
 # Load trade history from log file
 def load_trade_history():
     # Get the session log file from session state
-    session_file = st.session_state.get('session_log_file', 'trades_log.jsonl')
+    session_file = st.session_state.get('session_log_file', 'trade_log/trades_log.jsonl')
     if not os.path.exists(session_file):
         return pd.DataFrame()
     
@@ -306,8 +306,8 @@ trading_duration = st.sidebar.slider(
 if st.session_state.trading_status == 'stopped':
     if st.sidebar.button("🚀 Start Trading", type="primary"):
         # Clear the log file to ensure fresh data for each run
-        if os.path.exists('trades_log.jsonl'):
-            os.remove('trades_log.jsonl')
+        if os.path.exists('trade_log/trades_log.jsonl'):
+            os.remove('trade_log/trades_log.jsonl')
         st.session_state.trading_status = 'running'  # Set status before starting thread to prevent multiple starts
         # Start trading in a separate thread, passing the session log file
         thread = threading.Thread(

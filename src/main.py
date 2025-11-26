@@ -208,7 +208,7 @@ def log_trade(asset, decision, result, portfolio_value, advanced_decision=None, 
     # Append to trades log file - only for the active session
     # Use a configurable log file name with default fallback
     import os
-    log_file_name = os.environ.get('TRADES_LOG_FILE', 'trades_log.jsonl')
+    log_file_name = os.environ.get('TRADES_LOG_FILE', 'trade_log/trades_log.jsonl')
     with open(log_file_name, 'a') as f:
         f.write(json.dumps(log_entry) + '\n')
 
@@ -217,7 +217,7 @@ def log_trade(asset, decision, result, portfolio_value, advanced_decision=None, 
 def initialize_log_file():
     """Clear the log file at the start of each run to show fresh data"""
     import os
-    log_file_name = os.environ.get('TRADES_LOG_FILE', 'trades_log.jsonl')
+    log_file_name = os.environ.get('TRADES_LOG_FILE', 'trade_log/trades_log.jsonl')
     with open(log_file_name, 'w') as f:
         pass  # Just open and close to clear the file
 
