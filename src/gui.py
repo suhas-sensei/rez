@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -14,7 +15,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from main import run_trading_session, stop_trading_session
 
 # Configure the page to have a fixed sidebar
-st.set_page_config(layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(layout="centered", initial_sidebar_state="expanded")
 
 # Rezlabs Theme - Custom CSS
 st.markdown("""
@@ -35,7 +36,8 @@ st.markdown("""
         font-weight: 400;
     }
     
-    p, div, span, label, input, button {
+    /* Apply Inter font generally but NOT globally to everything to avoid breaking icons */
+    .stMarkdown, .stText, p, label, input, .stButton button {
         font-family: 'Inter', sans-serif !important;
     }
     
@@ -50,18 +52,24 @@ st.markdown("""
        SIDEBAR STYLES (LIGHT THEME)
        ========================================= */
     
-    /* Fixed Sidebar Container */
+    /* Sidebar Container - Desktop Default */
     [data-testid="stSidebar"] {
-        background-color: #ffffff;
+        background-color: #d8d8d8; /* Darker grey for better contrast with toggle button */
         border-right: 1px solid #e5e5e5;
-        position: fixed !important;
-        height: 100vh !important;
-        top: 0;
-        left: 0;
-        max-width: 15%;
-        min-width: 15%;
-        width: 15%;
-        z-index: 999990;
+    }
+    
+    /* Desktop: Fixed 15% width */
+    @media (min-width: 900px) {
+        [data-testid="stSidebar"] {
+            min-width: 15% !important;
+            max-width: 15% !important;
+            width: 15% !important;
+        }
+        
+        /* Adjust main content to respect the 15% sidebar */
+        [data-testid="stMain"] {
+            margin-left: 0 !important; /* Streamlit handles this automatically mostly, but we reset our previous override */
+        }
     }
     
     /* Sidebar Headers */
@@ -134,12 +142,6 @@ st.markdown("""
        MAIN CONTENT STYLES (DARK THEME)
        ========================================= */
        
-    /* Main content positioning */
-    [data-testid="stMain"] {
-        margin-left: 15% !important;
-        max-width: 75% !important;
-    }
-    
     /* Main Content Metrics */
     [data-testid="stMain"] [data-testid="stMetricValue"] {
         color: #ffffff !important;
@@ -186,9 +188,21 @@ st.markdown("""
         display: none !important;
     }
     
-    /* Completely hide the sidebar collapse button */
-    [data-testid="stSidebarCollapseButton"], [data-testid="collapsedControl"] {
-        display: none !important;
+    /* Ensure the native sidebar toggle button is visible and styled */
+    [data-testid="stSidebarCollapseButton"] {
+        display: block !important;
+        background-color: transparent !important; /* Transparent background */
+        border: 2px solid #000000 !important; /* Black border */
+        border-radius: 4px !important;
+        padding: 4px !important;
+    }
+    
+    [data-testid="stSidebarCollapseButton"]:hover {
+        background-color: rgba(0, 0, 0, 0.1) !important; /* Slight dark tint on hover */
+    }
+    
+    [data-testid="stSidebarCollapseButton"] svg {
+        fill: #000000 !important; /* Black icon */
     }
     
 </style>
