@@ -14,7 +14,7 @@ from config import settings
 from trading.hyperliquid_client import HyperliquidClient, get_client, get_historical_data
 from services.funding import get_funding_service, FundingService
 from indicators.quant_indicator_calculator import calculate_indicators
-from agent.advanced_decision_maker import make_advanced_trading_decision
+from agent.decision_maker import make_trading_decision
 
 
 # ==================== MODELS ====================
@@ -28,9 +28,10 @@ class FundUserRequest(BaseModel):
     amount: Optional[float] = None
 
 class AgentStartRequest(BaseModel):
-    assets: List[str] = ["BTC", "ETH"]
-    risk_profile: str = "medium"
-    interval_seconds: int = 60
+    assets: List[str] = ["ETH"]  # ETH only for now
+    risk_profile: str = "low"
+    interval_seconds: int = 30  # Faster trading
+    betting_amount: float = 10.0  # Hyperliquid minimum is $10
 
 class PlaceOrderRequest(BaseModel):
     asset: str
@@ -48,6 +49,10 @@ app = FastAPI(
     version="2.0.0"
 )
 
+# Debug: Print settings on startup
+print(f"[STARTUP] Hyperliquid Wallet: {settings.hyperliquid_wallet_address}")
+print(f"[STARTUP] Testnet: {settings.hyperliquid_testnet}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -63,12 +68,16 @@ class AgentState:
     def __init__(self):
         self.running = False
         self.paused = False
-        self.assets: List[str] = []
-        self.risk_profile: str = "medium"
-        self.interval_seconds: int = 60
+        self.assets: List[str] = ["ETH"]
+        self.risk_profile: str = "low"
+        self.interval_seconds: int = 30
+        self.betting_amount: float = 10.0  # Hyperliquid minimum is $10
         self.trade_history: List[Dict] = []
         self.last_decisions: Dict[str, Dict] = {}
         self.task: Optional[asyncio.Task] = None
+        # Track open position for P&L calculation
+        self.open_position: Optional[Dict] = None  # {asset, side, size, entry_price, entry_time}
+        self.realized_pnl: float = 0.0  # Total realized P&L
 
 agent_state = AgentState()
 
@@ -163,16 +172,25 @@ async def register_and_fund_user(request: UserRegisterRequest):
 async def get_portfolio(wallet_address: Optional[str] = None):
     """Get portfolio state (positions, balance)"""
     client = get_client()
-    
-    addr = wallet_address or settings.hyperliquid_wallet_address
+
+    # Always use the configured Hyperliquid wallet (where the funds are)
+    # The Privy wallet is for authentication only
+    addr = settings.hyperliquid_wallet_address
+    print(f"[DEBUG] Portfolio request - wallet address from settings: {addr}")
+
     if not addr:
-        raise HTTPException(status_code=400, detail="No wallet address provided")
-    
+        raise HTTPException(status_code=400, detail="No Hyperliquid wallet configured")
+
+    # Get raw state from Hyperliquid
+    raw_state = client.info.user_state(addr)
+    print(f"[DEBUG] Raw state from Hyperliquid: {raw_state}")
+
     state = client.get_account_state(addr)
-    
+    print(f"[DEBUG] Parsed state: {state}")
+
     if "error" in state:
         raise HTTPException(status_code=500, detail=state["error"])
-    
+
     return {
         "wallet_address": addr,
         "account_value": state.get("account_value", 0),
@@ -306,26 +324,32 @@ async def start_agent(request: AgentStartRequest):
     """Start the trading agent"""
     if agent_state.running:
         return {"status": "already_running"}
-    
-    agent_state.assets = request.assets
+
+    agent_state.assets = ["ETH"]  # Force ETH only
     agent_state.risk_profile = request.risk_profile
     agent_state.interval_seconds = request.interval_seconds
+    agent_state.betting_amount = request.betting_amount
     agent_state.running = True
     agent_state.paused = False
-    
+    agent_state.open_position = None
+    agent_state.realized_pnl = 0.0
+    agent_state.trade_history = []  # Reset trade history on new session
+
     # Start the trading loop
     agent_state.task = asyncio.create_task(trading_loop())
-    
+
     await broadcast_update({"type": "agent_started", "data": {
-        "assets": request.assets,
-        "risk_profile": request.risk_profile
+        "assets": ["ETH"],
+        "risk_profile": request.risk_profile,
+        "betting_amount": request.betting_amount
     }})
-    
+
     return {
         "status": "started",
-        "assets": request.assets,
+        "assets": ["ETH"],
         "risk_profile": request.risk_profile,
-        "interval_seconds": request.interval_seconds
+        "interval_seconds": request.interval_seconds,
+        "betting_amount": request.betting_amount
     }
 
 
@@ -368,6 +392,9 @@ async def get_agent_status():
         "assets": agent_state.assets,
         "risk_profile": agent_state.risk_profile,
         "interval_seconds": agent_state.interval_seconds,
+        "betting_amount": agent_state.betting_amount,
+        "open_position": agent_state.open_position,
+        "realized_pnl": agent_state.realized_pnl,
         "last_decisions": agent_state.last_decisions,
         "trade_count": len(agent_state.trade_history)
     }
@@ -382,80 +409,147 @@ async def get_last_decisions():
 # ==================== TRADING LOOP ====================
 
 async def trading_loop():
-    """Main trading loop - runs continuously when agent is active"""
+    """Main trading loop - ETH only, uses betting amount, tracks P&L"""
     client = get_client()
-    
+    asset = "ETH"  # Fixed to ETH only
+
+    print(f"[AGENT] Started with betting amount: ${agent_state.betting_amount}")
+
     while agent_state.running:
         if agent_state.paused:
             await asyncio.sleep(1)
             continue
-        
-        for asset in agent_state.assets:
-            if not agent_state.running:
-                break
-                
-            try:
-                # Get historical data from Hyperliquid
-                price_data = client.get_candles(asset, "1h", 50)
-                
-                if price_data.empty:
-                    print(f"No price data for {asset}, skipping")
-                    continue
-                
-                # Get portfolio value
-                portfolio_value = client.get_balance()
-                
-                # Make trading decision using your AI
-                decision = make_advanced_trading_decision(
-                    asset=asset,
-                    price_data=price_data,
-                    portfolio_value=portfolio_value,
-                    risk_profile=agent_state.risk_profile
-                )
-                
-                # Store decision
-                agent_state.last_decisions[asset] = {
-                    **decision,
-                    "timestamp": datetime.now().isoformat()
-                }
-                
-                # Broadcast decision
-                await broadcast_update({
-                    "type": "decision",
-                    "asset": asset,
-                    "data": decision
-                })
-                
-                # Execute if not HOLD
-                if decision["decision"] != "HOLD":
-                    # Calculate position size
-                    position_size = decision.get("position_size", portfolio_value * 0.01)
-                    current_price = price_data['close'].iloc[-1]
-                    size_in_asset = position_size / current_price
-                    
-                    # Place order
-                    is_buy = decision["decision"] == "BUY"
-                    result = client.place_market_order(asset, is_buy, size_in_asset)
-                    
+
+        try:
+            # Get ETH price data
+            price_data = client.get_candles(asset, "15m", 50)  # 15min candles for faster signals
+
+            if price_data.empty:
+                print(f"[AGENT] No price data for {asset}, retrying...")
+                await asyncio.sleep(5)
+                continue
+
+            current_price = float(price_data['close'].iloc[-1])
+
+            # Make trading decision using LLM
+            from indicators.quant_indicator_calculator import calculate_indicators
+            indicators = calculate_indicators(price_data)
+            indicators['current_price'] = current_price
+
+            decision_result = make_trading_decision(
+                asset=asset,
+                indicators=indicators,
+                portfolio_value=agent_state.betting_amount,
+                risk_profile=agent_state.risk_profile
+            )
+
+            # Convert string decision to dict format
+            decision = {
+                "decision": decision_result,
+                "combined_signal": 0,  # LLM doesn't return signal score
+                "llm_used": True
+            }
+
+            # Store decision
+            agent_state.last_decisions[asset] = {
+                **decision,
+                "current_price": current_price,
+                "timestamp": datetime.now().isoformat()
+            }
+
+            print(f"[AGENT] Decision: {decision['decision']} | Signal: {decision.get('combined_signal', 0):.3f} | Price: ${current_price:.2f}")
+
+            # Broadcast decision
+            await broadcast_update({
+                "type": "decision",
+                "asset": asset,
+                "data": decision
+            })
+
+            # Trading logic with position tracking
+            if decision["decision"] == "BUY" and agent_state.open_position is None:
+                # Open new position - use betting amount
+                size_in_eth = agent_state.betting_amount / current_price
+                size_in_eth = round(size_in_eth, 4)  # ETH has 4 decimals
+
+                # Check balance - must pass wallet address
+                available = client.get_account_state(settings.hyperliquid_wallet_address).get("available_balance", 0)
+                if agent_state.betting_amount > available:
+                    print(f"[AGENT] Insufficient balance: need ${agent_state.betting_amount}, have ${available:.2f}")
+                else:
+                    result = client.place_market_order(asset, True, size_in_eth)
+                    print(f"[AGENT] OPENED LONG: {size_in_eth:.4f} ETH @ ${current_price:.2f}")
+
+                    # Track open position
+                    agent_state.open_position = {
+                        "asset": asset,
+                        "side": "LONG",
+                        "size": size_in_eth,
+                        "entry_price": current_price,
+                        "entry_value": agent_state.betting_amount,
+                        "entry_time": datetime.now().isoformat()
+                    }
+
                     # Record trade
                     trade_record = {
                         "asset": asset,
-                        "decision": decision["decision"],
-                        "size": size_in_asset,
+                        "decision": "BUY",
+                        "side": "OPEN_LONG",
+                        "size": size_in_eth,
                         "price": current_price,
-                        "result": result,
-                        "analysis": decision,
+                        "value": agent_state.betting_amount,
+                        "pnl": None,  # No P&L on open
                         "timestamp": datetime.now().isoformat()
                     }
                     agent_state.trade_history.append(trade_record)
-                    
-                    # Broadcast trade
                     await broadcast_update({"type": "trade", "data": trade_record})
-                
-            except Exception as e:
-                print(f"Error processing {asset}: {e}")
-                await broadcast_update({"type": "error", "asset": asset, "message": str(e)})
-        
+
+            elif decision["decision"] == "SELL" and agent_state.open_position is not None:
+                # Close position and calculate P&L
+                pos = agent_state.open_position
+                size_in_eth = pos["size"]
+                entry_price = pos["entry_price"]
+                entry_value = pos["entry_value"]
+
+                result = client.place_market_order(asset, False, size_in_eth)
+                exit_value = size_in_eth * current_price
+                pnl = exit_value - entry_value
+
+                print(f"[AGENT] CLOSED LONG: {size_in_eth:.4f} ETH @ ${current_price:.2f} | P&L: ${pnl:.2f}")
+
+                # Update realized P&L
+                agent_state.realized_pnl += pnl
+                agent_state.open_position = None
+
+                # Record trade
+                trade_record = {
+                    "asset": asset,
+                    "decision": "SELL",
+                    "side": "CLOSE_LONG",
+                    "size": size_in_eth,
+                    "price": current_price,
+                    "entry_price": entry_price,
+                    "value": exit_value,
+                    "pnl": pnl,
+                    "timestamp": datetime.now().isoformat()
+                }
+                agent_state.trade_history.append(trade_record)
+                await broadcast_update({"type": "trade", "data": trade_record})
+
+            # Broadcast status update
+            await broadcast_update({
+                "type": "status",
+                "open_position": agent_state.open_position,
+                "realized_pnl": agent_state.realized_pnl,
+                "current_price": current_price
+            })
+
+        except Exception as e:
+            print(f"[AGENT] Error: {e}")
+            import traceback
+            traceback.print_exc()
+            await broadcast_update({"type": "error", "asset": asset, "message": str(e)})
+
         # Wait for next interval
         await asyncio.sleep(agent_state.interval_seconds)
 

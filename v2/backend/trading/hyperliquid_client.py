@@ -68,18 +68,29 @@ class HyperliquidClient:
     def get_candles(self, asset: str, interval: str = "1h", lookback: int = 50) -> pd.DataFrame:
         """
         Get historical OHLCV candles for an asset
-        
+
         Args:
             asset: Asset symbol (e.g., "BTC", "ETH")
             interval: Candle interval ("1m", "5m", "15m", "1h", "4h", "1d")
             lookback: Number of candles to fetch
-            
+
         Returns:
             DataFrame with columns: timestamp, open, high, low, close, volume
         """
         try:
             # Hyperliquid uses asset names directly (BTC, ETH, etc.)
-            candles = self.info.candles_snapshot(asset.upper(), interval, lookback)
+            import time
+
+            # Calculate time range based on interval
+            interval_seconds = {
+                "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400
+            }.get(interval, 3600)
+
+            end_time = int(time.time() * 1000)
+            start_time = end_time - (lookback * interval_seconds * 1000)
+
+            # candles_snapshot takes (coin, interval, startTime, endTime)
+            candles = self.info.candles_snapshot(asset.upper(), interval, start_time, end_time)
             
             if not candles or len(candles) == 0:
                 print(f"No candle data for {asset}")
@@ -124,7 +135,7 @@ class HyperliquidClient:
     def get_account_state(self, address: Optional[str] = None) -> Dict[str, Any]:
         """
         Get full account state including balances and positions
-        
+
         Returns dict with:
             - account_value: Total account value in USD
             - margin_used: Margin currently in use
@@ -134,13 +145,31 @@ class HyperliquidClient:
         addr = address or self.wallet_address
         if not addr:
             return {"error": "No wallet address configured"}
-            
+
         try:
             state = self.info.user_state(addr)
-            
+            print(f"[DEBUG] Raw user_state response: {state}")
+
             margin_summary = state.get("marginSummary", {})
             positions = state.get("assetPositions", [])
-            
+
+            # Try multiple possible field names for account value
+            account_value = 0.0
+            if margin_summary:
+                account_value = float(margin_summary.get("accountValue", 0) or 0)
+
+            # Try multiple possible field names for withdrawable/available balance
+            available = 0.0
+            if "withdrawable" in state:
+                available = float(state.get("withdrawable", 0) or 0)
+            elif "crossMarginSummary" in state:
+                cross_margin = state.get("crossMarginSummary", {})
+                available = float(cross_margin.get("accountValue", 0) or 0)
+
+            # If account_value is still 0, try using available as fallback
+            if account_value == 0 and available > 0:
+                account_value = available
+
             # Parse positions
             parsed_positions = []
             for pos in positions:
@@ -148,22 +177,26 @@ class HyperliquidClient:
                 if position_data:
                     parsed_positions.append({
                         "asset": position_data.get("coin", ""),
-                        "size": float(position_data.get("szi", 0)),
-                        "entry_price": float(position_data.get("entryPx", 0)),
-                        "unrealized_pnl": float(position_data.get("unrealizedPnl", 0)),
-                        "leverage": float(position_data.get("leverage", {}).get("value", 1)),
+                        "size": float(position_data.get("szi", 0) or 0),
+                        "entry_price": float(position_data.get("entryPx", 0) or 0),
+                        "unrealized_pnl": float(position_data.get("unrealizedPnl", 0) or 0),
+                        "leverage": float(position_data.get("leverage", {}).get("value", 1) if isinstance(position_data.get("leverage"), dict) else 1),
                         "liquidation_price": position_data.get("liquidationPx")
                     })
-            
+
+            print(f"[DEBUG] Parsed account_value: {account_value}, available: {available}")
+
             return {
-                "account_value": float(margin_summary.get("accountValue", 0)),
-                "margin_used": float(margin_summary.get("totalMarginUsed", 0)),
-                "available_balance": float(margin_summary.get("withdrawable", 0)),
+                "account_value": account_value,
+                "margin_used": float(margin_summary.get("totalMarginUsed", 0) or 0),
+                "available_balance": available,
                 "positions": parsed_positions
             }
-            
+
         except Exception as e:
             print(f"Error fetching account state: {e}")
+            import traceback
+            traceback.print_exc()
             return {"error": str(e)}
 
     def get_balance(self, address: Optional[str] = None) -> float:
@@ -186,24 +219,45 @@ class HyperliquidClient:
 
     # ==================== ORDER EXECUTION ====================
 
-    def place_market_order(self, asset: str, is_buy: bool, size: float, slippage: float = 0.01) -> Dict[str, Any]:
+    def place_market_order(self, asset: str, is_buy: bool, size: float, slippage: float = 0.03) -> Dict[str, Any]:
         """
-        Place a market order
-        
+        Place a market order using aggressive limit order (better for testnet)
+
         Args:
             asset: Asset symbol (e.g., "BTC")
             is_buy: True for buy/long, False for sell/short
             size: Position size in asset units
-            slippage: Acceptable slippage (default 1%)
-            
+            slippage: Acceptable slippage (default 3% for testnet wide spreads)
+
         Returns:
             Order result dict
         """
         if not self.exchange:
             return {"status": "error", "message": "Exchange client not initialized (no private key)"}
-            
+
         try:
-            result = self.exchange.market_open(asset.upper(), is_buy, size, None, slippage)
+            # Get current price and use aggressive limit order (works better on testnet)
+            current_price = self.get_price(asset)
+            if not current_price:
+                return {"status": "error", "message": f"Could not get price for {asset}"}
+
+            # Use aggressive price with slippage
+            if is_buy:
+                limit_price = current_price * (1 + slippage)  # Pay up to 3% more
+            else:
+                limit_price = current_price * (1 - slippage)  # Accept 3% less
+
+            # Round price to appropriate precision
+            limit_price = round(limit_price, 1)
+
+            print(f"[TRADE] Placing {'BUY' if is_buy else 'SELL'} order: {size} {asset} @ ${limit_price} (market: ${current_price})")
+
+            # Use IOC (Immediate or Cancel) limit order - acts like market order
+            order_type = {"limit": {"tif": "Ioc"}}
+            result = self.exchange.order(asset.upper(), is_buy, size, limit_price, order_type)
+
+            print(f"[TRADE] Order result: {result}")
+
             return {
                 "status": "ok" if result.get("status") == "ok" else "error",
                 "result": result,
@@ -211,9 +265,11 @@ class HyperliquidClient:
                 "asset": asset,
                 "side": "buy" if is_buy else "sell",
                 "size": size,
+                "price": limit_price,
                 "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
+            print(f"[TRADE] Error: {e}")
             return {"status": "error", "message": str(e)}
 
     def place_limit_order(self, asset: str, is_buy: bool, size: float, price: float, 

@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     privy_app_secret: str = ""
 
     class Config:
-        env_file = ".env"
+        env_file = (".env", ".env.local")  # Load both .env and .env.local
         env_file_encoding = "utf-8"
         extra = "ignore"
 

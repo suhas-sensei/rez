@@ -1,7 +1,7 @@
 import openai
 from datetime import datetime
 from config import settings
-from indicators.quant_indicator_calculator import get_quant_indicators
+from indicators.quant_indicator_calculator import calculate_indicators
 
 
 def get_config():
@@ -13,12 +13,21 @@ def get_config():
     }
 
 
-def make_trading_decision(asset, indicators, portfolio_value):
+def make_trading_decision(asset, indicators, portfolio_value, risk_profile="medium"):
     """
     Use AI to make a trading decision based on technical indicators and portfolio state
     Supports both OpenAI-compatible APIs and open source models
     """
     config = get_config()
+
+    # Adjust prompt based on risk profile
+    risk_guidance = {
+        "low": "Be conservative. Only recommend BUY or SELL when indicators strongly agree. Prefer HOLD when uncertain.",
+        "medium": "Take balanced approach. Trade when indicators show moderate agreement.",
+        "high": "Be aggressive. Look for trading opportunities even with weaker signals. Prefer action over holding."
+    }
+
+    guidance = risk_guidance.get(risk_profile, risk_guidance["medium"])
 
     # Prepare the prompt for the LLM
     prompt = f"""
@@ -26,6 +35,8 @@ def make_trading_decision(asset, indicators, portfolio_value):
 
     Current asset: {asset}
     Portfolio value: ${portfolio_value:,.2f}
+    Risk Profile: {risk_profile.upper()}
+
     Current indicators:
     - RSI: {indicators['rsi']}
     - MACD value: {indicators['macd']['value']}
@@ -36,7 +47,7 @@ def make_trading_decision(asset, indicators, portfolio_value):
                        Middle {indicators['bollinger_bands']['middle']},
                        Lower {indicators['bollinger_bands']['lower']}
 
-    Current time: {datetime.now().isoformat()}
+    Trading guidance: {guidance}
 
     Please respond with ONLY ONE of these three words:
     1. "BUY" - if the indicators suggest going long
@@ -79,13 +90,22 @@ def make_trading_decision(asset, indicators, portfolio_value):
 
     except Exception as e:
         print(f"Error getting AI decision: {e}")
-        return quant_based_decision(indicators)
+        return quant_based_decision(indicators, risk_profile)
 
 
-def quant_based_decision(indicators):
+def quant_based_decision(indicators, risk_profile="medium"):
     """
     Advanced fallback decision based on quant library calculations.
+    Adjusts thresholds based on risk profile.
     """
+    # Risk multipliers - higher risk = lower thresholds = more trades
+    risk_multipliers = {
+        "low": 1.5,      # Higher thresholds, fewer trades
+        "medium": 1.0,   # Standard thresholds
+        "high": 0.5      # Lower thresholds, more trades
+    }
+    risk_mult = risk_multipliers.get(risk_profile, 1.0)
+
     try:
         rsi = indicators.get('rsi', 50) or 50
         macd = indicators.get('macd', {'value': 0, 'signal': 0}) or {'value': 0, 'signal': 0}
@@ -189,8 +209,9 @@ def quant_based_decision(indicators):
             volume_factor = 1.1 if abs(total_score) > 0.5 else 1.0
             total_score *= volume_factor
 
-        base_buy_threshold = 1.2 if (is_volatile or is_trending) else 0.7
-        base_sell_threshold = -1.2 if (is_volatile or is_trending) else -0.7
+        # Apply risk multiplier to thresholds
+        base_buy_threshold = (1.2 if (is_volatile or is_trending) else 0.7) * risk_mult
+        base_sell_threshold = (-1.2 if (is_volatile or is_trending) else -0.7) * risk_mult
 
         if agreement_level >= 3:
             buy_threshold = base_buy_threshold * 0.8
